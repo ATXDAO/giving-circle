@@ -317,6 +317,14 @@ event FundedCircle(uint indexed circleNumb, uint256 amount); // emitted by propo
 
     function fundGiftForCircle(uint disburseforCircleNumber) public payable {
 
+            //Can only redeem USDC if KYCed and approved by an admin (aka Megan or multisig)
+            //Can only redeem USDC if approved by an admin (aka Megan or multisig)
+            //Can only redeem USDC if approved by an admin (aka Megan or multisig)
+            //Can only redeem USDC if approved by an admin (aka Megan or multisig)
+            //Can only redeem USDC if approved by an admin (aka Megan or multisig)
+            //Can only redeem USDC if approved by an admin (aka Megan or multisig)
+            //Can only redeem USDC if approved by an admin (aka Megan or multisig)
+            
             require(
                 circleNumbers[disburseforCircleNumber].circleFunded == false, "Circle has already been funded!"
             );
