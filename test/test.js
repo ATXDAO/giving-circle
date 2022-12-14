@@ -1,16 +1,13 @@
 const { expect } = require("chai");
 
 //uint256 step;
-//step 0 = newCircle
-//step 1 = propWindowOpen
-//step 2 = dispursingBeans
-//step 3 = beansDisbursed
-//step 4 = votingOpen
-//step 5 giftRedemption
+//step 1: Proposal Creation Phase
+//step 2: Bean Placement Phase
+//step 3: Gift Redeem Phase
 
 describe("Giving Circle", function () {
   it("", async function () {
-    const [owner] = await ethers.getSigners();
+    const [owner, dummy] = await ethers.getSigners();
 
     const Contract = await ethers.getContractFactory("ATXDAOgivingCircle");
 
@@ -31,16 +28,16 @@ describe("Giving Circle", function () {
     await contract.newCircle(1); 
     console.log(await contract.getCircleStep(1));
     
-    //create new proposals
-    await contract.newProposal(1, 1, owner.address);
+//     //create new proposals
+//     await contract.newProposal(1, 1, owner.address);
 
 
-    //sets to step 2
-    await contract.closePropWindow(1);
-    console.log(await contract.getCircleStep(1));
+//     //sets to step 2
+//     await contract.closePropWindow(1);
+//     console.log(await contract.getCircleStep(1));
 
-//    function disburseBeans(uint disburseforCircleNumber, address[] memory attendees) public payable virtual returns (bool) {
-    await contract.disburseBeans(1, [owner.address]);
+// //    function disburseBeans(uint disburseforCircleNumber, address[] memory attendees) public payable virtual returns (bool) {
+//     await contract.disburseBeans(1, [owner.address]);
 
 
 
