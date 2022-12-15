@@ -6,26 +6,39 @@ pragma solidity ^0.8.17;
 import "./partialIERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
+//functions callable during phase 0:
+//createNewCircleAndOpenProposalWindow() -- leader
+//functions callable during phase 1:
+//closeProposalWindowAndAttendeeRegistration() -- leader
+//createNewProposal() -- leader
+//registerAttendeeToCircle() -- leader
+//functions callable during phase 2:
+//closeCircleVoting() -- leader
+//placeBeans() -- attendee
+
+
+
 //can only redeem USDC if approved by an admin (aka Megan or multisig)
 
 contract ATXDAOgivingCircle is AccessControl {
 
     struct GivingCircle {
-        uint USDCperBean; // 
-        address circleLeader; // set to current circleleader per utility variable when newCircle function is run.
         uint256 step;
-        bool circleFunded;
+        
         uint256 proposalCount;
         mapping (uint256 => Proposal) proposals;
+        
         uint256 erc20Allocated;
-        // uint256 totalBeansDisbursed;
         uint256 totalAllocated;
         uint256 difference;
+        uint USDCperBean;
+        bool circleFunded;
+
         uint256 beansToDispursePerAttendee;
         uint256 numOfBeans;
-        mapping (address => uint256) currentBeanCount;
+        mapping (address => uint256) attendeeBeanCount;
         
-        uint256 numOfAttendees;
+        uint256 attendeeCount;
         mapping (uint256 => address) attendees;
     }
 
@@ -35,20 +48,16 @@ contract ATXDAOgivingCircle is AccessControl {
         // bool kyced;
     }
 
-    uint circleCount;
+    uint256 public circleCount;
     mapping (uint256 => GivingCircle) givingCircles;
-    mapping (address => uint) beanBalances; // beanBalances have decimals of 0. tracks outstanding votes from all circles attended.
 
     mapping (address => bool) isKYCed; // must be set to true in order for redemptions
 
-
     // bean events
-    event BeansDisbursed(uint indexed circleNumb, address[] indexed circleattendees, uint indexed beansdisbursedforcircle); // emitted in disburseBeans
     event BeansPlaced(uint indexed propNumb, uint indexed beansplaced, address indexed beanplacer); // emitted in placeBeans
 
     // circle events
     event CircleCreated(uint indexed circleNumb); // emitted in newCircle
-    event ProposalWindowClosed(uint indexed circleNumb, uint256 indexed proposalCount); // emitted in closePropWindow
     event VotingClosed(uint indexed circleNumb); // emitted in closeCircleVoting
 
     // proposal events
@@ -58,8 +67,6 @@ contract ATXDAOgivingCircle is AccessControl {
     bytes32 public constant CIRCLE_ADMIN_ROLE = keccak256("CIRCLE_ADMIN_ROLE");
 
     constructor(address _usdc, address _circleLeader, address _circleAdmin) {
-
-        //
         _grantRole(CIRCLE_LEADER_ROLE, _circleLeader);
         _grantRole(CIRCLE_ADMIN_ROLE, _circleAdmin);
 
@@ -67,14 +74,14 @@ contract ATXDAOgivingCircle is AccessControl {
         weiMultiplier = 10**18;  // set weiMultiplier to convert between ERC-20 decimal = 10**18 and decimal 0
         USDCperCircle = 1000; // set initial USDCperCircle. to be multiplied by weiMultiplier in all ERC20 calls
     }
-
-    function createNewCircleAndOpenProposalWindow(uint256 erc20Amount, uint256 _beansToDispursePerAttendee) public onlyRole(CIRCLE_LEADER_ROLE) {
+    
+    //Start Phase 0 Core Functions
+    function createNewCircleAndOpenProposalWindowAndAttendeeRegistration(uint256 erc20Amount, uint256 _beansToDispursePerAttendee) public onlyRole(CIRCLE_LEADER_ROLE) {
 
         GivingCircle storage _theGivingCircle = givingCircles[circleCount];
         circleCount++;
 
         _theGivingCircle.USDCperBean = 0;
-        _theGivingCircle.circleLeader = msg.sender;
         _theGivingCircle.step = 1;
         _theGivingCircle.circleFunded = false;
         _theGivingCircle.proposalCount = 0;
@@ -82,30 +89,17 @@ contract ATXDAOgivingCircle is AccessControl {
         _theGivingCircle.beansToDispursePerAttendee = _beansToDispursePerAttendee;
         emit CircleCreated(circleCount);
     }
+    //End Phase 0 Core Functions
 
-    function closeProposalWindowAndDisburseBeans(uint256 _circleIndex, address[] memory attendees) public onlyRole(CIRCLE_LEADER_ROLE) {
-        require(givingCircles[_circleIndex].step == 1, "circle needs to be in proposal creation phase.");
-
-        emit ProposalWindowClosed(_circleIndex, givingCircles[_circleIndex].proposalCount);
-
-        
-        emit BeansDisbursed(_circleIndex,attendees, (10 * attendees.length));
-
-        givingCircles[_circleIndex].step == 2;
-    }
-
-
-    function closeCircleVoting(uint256 _circleIndex) public onlyRole(CIRCLE_LEADER_ROLE) {
-        require(givingCircles[_circleIndex].step == 2, "circle needs to be in bean placement phase");
-        givingCircles[_circleIndex].step = 3;
-
-        _calcUSDCperBean(_circleIndex); // make sure this is correct
-        _allocateGifts(_circleIndex);
-        emit VotingClosed(_circleIndex);
-    }
-
+    //Start Phase 1 Core Functions
     function createNewProposal(uint256 circleIndex, address payable giftRecipient) public onlyRole(CIRCLE_LEADER_ROLE) {
         require(givingCircles[circleIndex].step == 1, "circle needs to be in proposal creation phase.");
+
+        for (uint256 i = 0; i < givingCircles[circleIndex].proposalCount; i++) {
+            if (givingCircles[circleIndex].proposals[i].giftAddress == giftRecipient) {
+                revert("Recipient already present in proposal!");
+            }
+        }
 
         uint256 proposalIndex = givingCircles[circleIndex].proposalCount;
         Proposal storage newProposal = givingCircles[circleIndex].proposals[proposalIndex];
@@ -117,112 +111,111 @@ contract ATXDAOgivingCircle is AccessControl {
         emit ProposalCreated(proposalIndex, circleIndex, giftRecipient);
     }
 
-    // function getAllAttendees(uint256 circleIndex) public view {
-        
-    //     address[] memory arr;
-
-    //     for (uint256 i = 0; i < givingCircles[circleIndex].numOfAttendees; i++) {
-    //         arr.push(givingCircles[circleIndex].attendees[i]);
-    //     }
-
-    //     return arr;
-    // }
-
-    function registerMeForCircle(uint256 circleIndex, address addr) public onlyRole(CIRCLE_LEADER_ROLE) {
-         
-        if (true) { //address has never received beans. 
-            givingCircles[circleIndex].numOfBeans += givingCircles[circleIndex].beansToDispursePerAttendee;
-            givingCircles[circleIndex].currentBeanCount[msg.sender] = givingCircles[circleIndex].beansToDispursePerAttendee;
-            givingCircles[circleIndex].attendees[givingCircles[circleIndex].numOfAttendees] = msg.sender;
-            givingCircles[circleIndex].numOfAttendees++;
+    //In current setup, allows for Megan or circle leader to mass add a list of arrays if they chose to gather them all beforehand
+    //or at the event.
+    function registerAttendeesToCircle(uint256 circleIndex, address[] memory addrs) public onlyRole(CIRCLE_LEADER_ROLE) {
+        for (uint256 i = 0; i < addrs.length; i++) {
+            registerAttendeeToCircle(circleIndex, addrs[i]);
         }
-         
     }
+
+    //In current setup, allows for an iPad to reach a server from a QR code scanned by a wallet. - More offhands approach
+    function registerAttendeeToCircle(uint256 circleIndex, address addr) public onlyRole(CIRCLE_LEADER_ROLE) {
+        require (
+            givingCircles[circleIndex].step == 1 ||
+            givingCircles[circleIndex].step == 2,
+            "circle needs to be in the proposal creation or bean placement phases."
+        );
+
+        bool isPresent = false;
+        for (uint256 i = 0; i < givingCircles[circleIndex].attendeeCount; i++) {
+            if (addr == givingCircles[circleIndex].attendees[i]) {
+                revert("Supplied address is already present in the number of attendees.");
+            }
+        }
+
+        if (!isPresent) {
+            givingCircles[circleIndex].numOfBeans += givingCircles[circleIndex].beansToDispursePerAttendee;
+            givingCircles[circleIndex].attendeeBeanCount[addr] = givingCircles[circleIndex].beansToDispursePerAttendee;
+            givingCircles[circleIndex].attendees[givingCircles[circleIndex].attendeeCount] = addr;
+            givingCircles[circleIndex].attendeeCount++;
+        }
+    }
+
+    function closeProposalWindowAndAttendeeRegistration(uint256 _circleIndex) public onlyRole(CIRCLE_LEADER_ROLE) {
+        require(givingCircles[_circleIndex].step == 1, "circle needs to be in proposal creation phase.");
+        givingCircles[_circleIndex].step = 2;
+    }
+
+    //End Phase 1 Core Functions
+
+    //Start Phase 2 Core Functions
 
     function placeBeans(uint256 circleIndex, uint256 proposalIndex, uint256 beanQuantity) external {
         require (
             givingCircles[circleIndex].step == 2, "circle needs to be in bean placement phase."
         );
 
-        require (
-            beanBalances[msg.sender] >= beanQuantity, "not enough beans held to place beanqty"
-        );
+        require(givingCircles[circleIndex].attendeeBeanCount[msg.sender] >= beanQuantity, "not enough beans held to place bean quantity.");
 
-        require(givingCircles[circleIndex].currentBeanCount[msg.sender] >= beanQuantity, "not enough beans held to place beanqty");
-        require(givingCircles[circleIndex].currentBeanCount[msg.sender] > 0, "Used all beans!");
-
-
-        givingCircles[circleIndex].currentBeanCount[msg.sender] -= beanQuantity;
-        // beanBalances[msg.sender] -= beanQuantity;
-        totalBeans -= beanQuantity;
+        givingCircles[circleIndex].attendeeBeanCount[msg.sender] -= beanQuantity;
         givingCircles[circleIndex].proposals[proposalIndex].beansReceived += beanQuantity;
         emit BeansPlaced(proposalIndex, beanQuantity, msg.sender);
     }
 
-    // START UTILITY FUNCTIONS
+    function closeCircleVoting(uint256 _circleIndex) public onlyRole(CIRCLE_LEADER_ROLE) {
+        require(givingCircles[_circleIndex].step == 2, "circle needs to be in bean placement phase");
+        givingCircles[_circleIndex].step = 3;
 
-    function getBeanBalance (address beanholder) external virtual returns (uint) {
-        return beanBalances[beanholder];
+        _calcUSDCperBean(_circleIndex);
+        _allocateGifts(_circleIndex);
+        emit VotingClosed(_circleIndex);
     }
 
-    function getCircleStep(uint256 circleIndex) public view returns(uint256) {
-        return givingCircles[circleIndex].step;
+    //Start Phase 2 Internal Functions
+    function _allocateGifts (uint circleIndex) internal virtual returns (bool) { 
+            uint256 useUSDCperBean = givingCircles[circleIndex].USDCperBean;
+
+
+            uint256 propCount = givingCircles[circleIndex].proposalCount;
+
+            address[] memory giftees = new address[](propCount);
+            uint[] memory allocations = new uint[](propCount);
+
+        for (uint i = 0; i < propCount; i++) {
+            uint256 allocate = givingCircles[circleIndex].proposals[i].beansReceived * useUSDCperBean; // beans received is decimal 0, USDCperBean is decimal 10**18, thus allocate is 10**18
+
+            USDCgiftPending[givingCircles[circleIndex].proposals[i].giftAddress] += allocate; // utilizes 10**18
+            //I think this line can get deleted. would like your confirmation.
+            // totalUSDCpending += allocate / weiMultiplier; // ensure proper decimal usage here, desired is decimals = 0 
+
+            giftees[i] = givingCircles[circleIndex].proposals[i].giftAddress;
+    
+            allocations[i] = allocate;
+            givingCircles[circleIndex].totalAllocated += allocate / weiMultiplier;
+            givingCircles[circleIndex].difference = givingCircles[circleIndex].erc20Allocated - givingCircles[circleIndex].totalAllocated;
+
+        }
+
+        
+            emit GiftsAllocated(circleIndex, giftees, allocations);
+
+            return true;
     }
 
-    // @tlogs: Returns the address of the circleLeader for a given circleNumber.
-    // IMPLEMENT a version of the below which searchs array of circle numbers for all circles an address was circleLeader
-
-    function getCircleLeaderForCircle(uint _circle) public view virtual returns (address) {
-        return givingCircles[_circle].circleLeader;
+    function _calcUSDCperBean (uint256 circle_) internal virtual returns (uint) {
+        uint256 availableUSDC = givingCircles[circle_].erc20Allocated * weiMultiplier; // availableUSDC is 10**18
+        uint256 newusdcperbean = (availableUSDC) / givingCircles[circle_].numOfBeans; // numberator is large due to weiMultipler, total beans is decimal = 0.
+        givingCircles[circle_].USDCperBean = newusdcperbean;
+        return newusdcperbean; // availableUSDC is 10**18, thus minimizing rounding with small totalBeans uint (not 10**18).
     }
 
-    // @tlogs: Check if a Giving Circle already exists at creation
+    //End Phase 2 Internal Functions
+    //End Phase 2 Core Functions
 
-    function doesCircleExists(uint circleIndex) public view returns (bool) {
-        return circleIndex < circleCount;
-    }
+    //Start Phase 3 Core Functions
 
-    // add a for loop so proposalWindowOpen can receive all proposalNumbers from a circle in uint[] array then check if any exist in proposalNumbers mapping
-
-    function proposalWindowOpen (uint _checkcircle) public virtual returns (bool) {
-        require (
-            givingCircles[_checkcircle].step < 2, "Giving Circle is not open for proposal submission"
-        );
-        return true;
-    }
-
-    function kycUser(address kycAddress) external onlyRole(CIRCLE_ADMIN_ROLE) {
-        isKYCed[kycAddress] = true;
-    }
-
-
-    //END UTILITY FUNCTIONS
-
-    //START USDC FUNDING CODE
-
-    partialIERC20 public USDC; // implement USDC ERC20 interface with USDC contract address in constructor
-
-    uint public weiMultiplier; // utilized in various calcs to convert to ERC20 decimals
-
-    uint public totalUSDCgifted; // decimals = 0
-
-    uint public totalUSDCpending; // decimals = 0
-
-    uint public totalBeans; // decimals = 0
-
-    uint[] public givingCircleIDs; // array of circle numbers utilized to check if giving cricle exists. array of all circle numbers
-
-    uint public USDCperCircle; // initially 1000 USDC per circle. decmials = 0 (multiplied by weiMultiplier in all calcs)
-
-    mapping (address => uint) public USDCgiftPending; // beanBalances have decimals of 10**18, always mirror changes in totalUSDCpending when changing mapping.
-    mapping (address => uint) public USDCgiftsReceived; // tracks total gifts withdrawn by proposers, decimals = 0
-
-    event FundedCircle(uint indexed circleNumb, uint256 amount); // emitted by proposeGift
-
-    // gift events
-    event GiftsAllocated(uint indexed circleNumb, address[] indexed giftrecipients, uint[] indexed giftamounts);  // emitted in _allocateGifts
-    event GiftRedeemed(uint indexed giftwithdrawn, address indexed withdrawee);  // emitted in redeemGift
-
+    //I think we still need to determine when this happens right and which steps are required for this to be completed?
     function fundGiftForCircle(uint circleIndex) public payable onlyRole(CIRCLE_ADMIN_ROLE) {
             require(
                 givingCircles[circleIndex].circleFunded == false, "Circle has already been funded!"
@@ -248,23 +241,107 @@ contract ATXDAOgivingCircle is AccessControl {
             givingCircles[circleIndex].proposals[proposalIndex].giftAddress == msg.sender, "This is not your gift!"
         );
         require(
+            givingCircles[circleIndex].circleFunded == true, "Circle needs to be funded first!"
+        );
+        require(
             isKYCed[msg.sender], "You need to be KYCed first!"
         );
-
-        require(givingCircles[circleIndex].circleFunded == true, "Circle needs to be funded first!");
-
-
 
         //not tested to work
         uint256 redemptionqty = USDCgiftPending[msg.sender]; // will be 10**18
         USDCgiftPending[msg.sender] = 0;
         address payable giftee = givingCircles[circleIndex].proposals[proposalIndex].giftAddress;
-        totalUSDCpending -= redemptionqty / weiMultiplier; // reduce pending gifts by redeemed amount
+        //I think this line can get deleted. would like your confirmation.
+        // totalUSDCpending -= redemptionqty / weiMultiplier; // reduce pending gifts by redeemed amount
         totalUSDCgifted += redemptionqty / weiMultiplier; // divide by weiMultiplier to give whole number totalUSDCgifted metric
         USDCgiftsReceived[msg.sender] += redemptionqty / weiMultiplier; // updates mapping to track total gifts withdrawn from contract
         USDC.transferFrom(address(this), giftee, redemptionqty); // USDCgiftPending mapping is 10**18, thus so is redemptionqty
         emit GiftRedeemed(redemptionqty, giftee);
     }
+    //End Phase 3 Core Functions
+
+    // START UTILITY FUNCTIONS
+
+    function getCircleStep(uint256 circleIndex) public view returns(uint256) {
+        return givingCircles[circleIndex].step;
+    }
+
+    function isCreatingProposals(uint _checkcircle) public virtual returns (bool) {
+        require (
+            givingCircles[_checkcircle].step == 1, "Giving Circle is not open for proposal submission"
+        );
+        return true;
+    }
+
+    function isPlacingBeans(uint _checkcircle) public virtual returns (bool) {
+        require (
+            givingCircles[_checkcircle].step == 2, "Giving Circle is not open for bean placements."
+        );
+        return true;
+    }
+
+    function isGiftRedeeming(uint _checkcircle) public virtual returns (bool) {
+        require (
+            givingCircles[_checkcircle].step == 3, "Giving Circle is not open gift redeeming."
+        );
+        return true;
+    }
+    
+    function getAttendeeAmountInCircle(uint256 circle) public view returns(uint256) {
+        return givingCircles[circle].attendeeCount;
+    }
+
+    function getAttendeesInCircle(uint256 circleIndex) public view returns(address[] memory) {
+
+        address[] memory arr = new address[](givingCircles[circleIndex].attendeeCount);
+
+        for (uint256 i = 0; i < givingCircles[circleIndex].attendeeCount; i++) {
+            arr[i] = givingCircles[circleIndex].attendees[i];
+        }
+
+        return arr;
+    }
+
+    function getProposalCountInCircle(uint256 circleIndex) public view returns(uint256) {
+        return givingCircles[circleIndex].proposalCount;
+    }
+
+    function getBeanCountInCircleFromSender(uint256 circleIndex) public view returns(uint256) {
+        return getBeanCountInCircle(circleIndex, msg.sender);
+    }
+
+    function getBeanCountInCircle(uint256 circleIndex, address addr) public view returns(uint256) {
+        return givingCircles[circleIndex].attendeeBeanCount[addr];
+    }
+
+    function kycUser(address kycAddress) external onlyRole(CIRCLE_ADMIN_ROLE) {
+        isKYCed[kycAddress] = true;
+    }
+
+    //END UTILITY FUNCTIONS
+
+    //START USDC FUNDING CODE
+
+    partialIERC20 public USDC; // implement USDC ERC20 interface with USDC contract address in constructor
+
+    uint public weiMultiplier; // utilized in various calcs to convert to ERC20 decimals
+
+    uint public totalUSDCgifted; // decimals = 0
+
+    // uint public totalUSDCpending; // decimals = 0
+
+    uint public USDCperCircle; // initially 1000 USDC per circle. decmials = 0 (multiplied by weiMultiplier in all calcs)
+
+    mapping (address => uint) public USDCgiftPending; // beanBalances have decimals of 10**18, always mirror changes in totalUSDCpending when changing mapping.
+    mapping (address => uint) public USDCgiftsReceived; // tracks total gifts withdrawn by proposers, decimals = 0
+
+    event FundedCircle(uint indexed circleNumb, uint256 amount); // emitted by proposeGift
+
+    // gift events
+    event GiftsAllocated(uint indexed circleNumb, address[] indexed giftrecipients, uint[] indexed giftamounts);  // emitted in _allocateGifts
+    event GiftRedeemed(uint indexed giftwithdrawn, address indexed withdrawee);  // emitted in redeemGift
+
+    
 
 
     function rollOverToIndex(uint256 startCircleIndex, uint256 endCircleIndex) public onlyRole(CIRCLE_LEADER_ROLE) {
@@ -277,43 +354,7 @@ contract ATXDAOgivingCircle is AccessControl {
     //         thus allocate will be 10**18 
     //         thus USDCgiftPending mapping will be 10**18
 
-    function _allocateGifts (uint circleIndex) internal virtual returns (bool) { 
-            uint256 useUSDCperBean = givingCircles[circleIndex].USDCperBean;
-
-
-            uint256 propCount = givingCircles[circleIndex].proposalCount;
-
-            address[] memory giftees = new address[](propCount);
-            uint[] memory allocations = new uint[](propCount);
-
-        for (uint i = 0; i < propCount; i++) {
-            uint256 allocate = givingCircles[circleIndex].proposals[i].beansReceived * useUSDCperBean; // beans received is decimal 0, USDCperBean is decimal 10**18, thus allocate is 10**18
-
-            USDCgiftPending[givingCircles[circleIndex].proposals[i].giftAddress] += allocate; // utilizes 10**18
-            totalUSDCpending += allocate / weiMultiplier; // ensure proper decimal usage here, desired is decimals = 0 
-
-            giftees[i] = givingCircles[circleIndex].proposals[i].giftAddress;
     
-            allocations[i] = allocate;
-            givingCircles[circleIndex].totalAllocated += allocate / weiMultiplier;
-            givingCircles[circleIndex].difference = givingCircles[circleIndex].erc20Allocated - givingCircles[circleIndex].totalAllocated;
-
-        }
-
-        
-            emit GiftsAllocated(circleIndex, giftees, allocations);
-
-            return true;
-    }
-
-    // @tlogs: availableUSDC multiplies denominator by weiMultiplier to mitigate rounding errors due to uint
-
-    function _calcUSDCperBean (uint256 circle_) internal virtual returns (uint) {
-        uint256 availableUSDC = givingCircles[circle_].erc20Allocated * weiMultiplier; // availableUSDC is 10**18
-        uint256 newusdcperbean = (availableUSDC) / givingCircles[circle_].numOfBeans; // numberator is large due to weiMultipler, total beans is decimal = 0.
-        givingCircles[circle_].USDCperBean = newusdcperbean;
-        return newusdcperbean; // availableUSDC is 10**18, thus minimizing rounding with small totalBeans uint (not 10**18).
-    }
     //END USDC FUNDING CODE
 
 
@@ -350,20 +391,4 @@ contract ATXDAOgivingCircle is AccessControl {
     // }
 
     // END EXPLAIN DESIRE TO HAVE THIS
-
-    //event BeansRemoved(address indexed beanhorder, uint indexed beansremoved); // emitted in removeBeans
-
-    //NOT SURE HOW WE PLAN TO USE THIS
-    // @tlogs: cleanup function for circle leader to delete unallocated bean balances after a circle
-
-    // function removeBeanBalances(address beanhorder) public returns (bool) {
-    //     require(
-    //        circleLeader == msg.sender, "only circle leader can remove bean balances"
-    //     );  
-    //     uint deletedbalance = beanBalances[beanhorder];
-    //     delete beanBalances[beanhorder];
-    //     emit BeansRemoved(beanhorder, deletedbalance);
-    //     return true;
-    // }
-
 }

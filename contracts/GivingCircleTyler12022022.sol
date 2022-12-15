@@ -107,7 +107,7 @@ interface giftTokenContract {
 
 // implement giftToken instead of USDC throughout. allows for easily adding multiple gift tokens.
 
-contract ATXDAOgivingCircle {
+contract ATXDAOgivingCircleTyler12142022 {
 
 // STATE VARIABLES & STRUCTS
 
