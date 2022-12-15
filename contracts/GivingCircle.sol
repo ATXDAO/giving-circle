@@ -6,6 +6,14 @@ pragma solidity ^0.8.17;
 import "./partialIERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
+//README README README README README README 
+//From my current understanding...the current implementation works all the way through perfectly or near perfectly.
+//I am able to go through the entire process with expected behaviour all the way to proposal's gift recipient ending up
+//with an amount of ERC20 by the end! The main concern is the weiMultiplier. I removed it from the implementation as
+//I was funding through the javascript, 1000 USDC. However, when dealing in the smart contract (the weiMultiplier),
+//the numbers weren't adding up correctly. Hoping we can go over this. The code using weiMultiplier should still be there
+//but is currently commented out.
+
 //functions callable during phase 0:
 //createNewCircleAndOpenProposalWindow() -- leader
 //functions callable during phase 1:
@@ -15,8 +23,6 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 //functions callable during phase 2:
 //closeCircleVoting() -- leader
 //placeBeans() -- attendee
-
-
 
 //can only redeem USDC if approved by an admin (aka Megan or multisig)
 
@@ -53,6 +59,23 @@ contract ATXDAOgivingCircle is AccessControl {
 
     mapping (address => bool) isKYCed; // must be set to true in order for redemptions
 
+    partialIERC20 public USDC; // implement USDC ERC20 interface with USDC contract address in constructor
+
+    //I am certain this won't get removed but may be required for some currencies. Currently works without using it using
+    //a token with 18 decimal places
+
+    // uint public weiMultiplier; // utilized in various calcs to convert to ERC20 decimals
+
+    uint public totalUSDCgifted; // decimals = 0
+
+    // uint public totalUSDCpending; // decimals = 0
+
+    //I think this can get removed. would like your confirmation first.
+    // uint public USDCperCircle; // initially 1000 USDC per circle. decmials = 0 (multiplied by weiMultiplier in all calcs)
+
+    mapping (address => uint) public USDCgiftPending; // beanBalances have decimals of 10**18, always mirror changes in totalUSDCpending when changing mapping.
+    mapping (address => uint) public USDCgiftsReceived; // tracks total gifts withdrawn by proposers, decimals = 0
+
     // bean events
     event BeansPlaced(uint indexed propNumb, uint indexed beansplaced, address indexed beanplacer); // emitted in placeBeans
 
@@ -63,6 +86,14 @@ contract ATXDAOgivingCircle is AccessControl {
     // proposal events
     event ProposalCreated(uint indexed propNumb, uint indexed circleNumb, address indexed giftrecipient); // emitted by proposeGift
 
+    event FundedCircle(uint indexed circleNumb, uint256 amount); // emitted by proposeGift
+    // gift events
+    event GiftsAllocated(uint indexed circleNumb);  // emitted in _allocateGifts
+    // event GiftsAllocated(uint indexed circleNumb, address[] indexed giftrecipients, uint[] indexed giftamounts);  // emitted in _allocateGifts
+    event GiftRedeemed(uint indexed giftwithdrawn, address indexed withdrawee);  // emitted in redeemGift
+
+    
+
     bytes32 public constant CIRCLE_LEADER_ROLE = keccak256("CIRCLE_LEADER_ROLE");
     bytes32 public constant CIRCLE_ADMIN_ROLE = keccak256("CIRCLE_ADMIN_ROLE");
 
@@ -71,8 +102,10 @@ contract ATXDAOgivingCircle is AccessControl {
         _grantRole(CIRCLE_ADMIN_ROLE, _circleAdmin);
 
         USDC = partialIERC20(_usdc); // set usdc contract address
-        weiMultiplier = 10**18;  // set weiMultiplier to convert between ERC-20 decimal = 10**18 and decimal 0
-        USDCperCircle = 1000; // set initial USDCperCircle. to be multiplied by weiMultiplier in all ERC20 calls
+        // weiMultiplier = 10**18;  // set weiMultiplier to convert between ERC-20 decimal = 10**18 and decimal 0
+        
+        //i think this can get removed. would like your confirmation first.
+        // USDCperCircle = 1000; // set initial USDCperCircle. to be multiplied by weiMultiplier in all ERC20 calls
     }
     
     //Start Phase 0 Core Functions
@@ -173,14 +206,23 @@ contract ATXDAOgivingCircle is AccessControl {
     }
 
     //Start Phase 2 Internal Functions
+
+    function _calcUSDCperBean (uint256 circle_) internal virtual returns (uint) {
+        uint256 availableUSDC = givingCircles[circle_].erc20Allocated; // availableUSDC is 10**18
+        // uint256 availableUSDC = givingCircles[circle_].erc20Allocated * weiMultiplier; // availableUSDC is 10**18
+        uint256 newusdcperbean = (availableUSDC) / givingCircles[circle_].numOfBeans; // numberator is large due to weiMultipler, total beans is decimal = 0.
+        givingCircles[circle_].USDCperBean = newusdcperbean;
+        return newusdcperbean; // availableUSDC is 10**18, thus minimizing rounding with small totalBeans uint (not 10**18).
+    }
+
     function _allocateGifts (uint circleIndex) internal virtual returns (bool) { 
             uint256 useUSDCperBean = givingCircles[circleIndex].USDCperBean;
 
 
             uint256 propCount = givingCircles[circleIndex].proposalCount;
 
-            address[] memory giftees = new address[](propCount);
-            uint[] memory allocations = new uint[](propCount);
+            // address[] memory giftees = new address[](propCount);
+            // uint[] memory allocations = new uint[](propCount);
 
         for (uint i = 0; i < propCount; i++) {
             uint256 allocate = givingCircles[circleIndex].proposals[i].beansReceived * useUSDCperBean; // beans received is decimal 0, USDCperBean is decimal 10**18, thus allocate is 10**18
@@ -189,25 +231,17 @@ contract ATXDAOgivingCircle is AccessControl {
             //I think this line can get deleted. would like your confirmation.
             // totalUSDCpending += allocate / weiMultiplier; // ensure proper decimal usage here, desired is decimals = 0 
 
-            giftees[i] = givingCircles[circleIndex].proposals[i].giftAddress;
-    
-            allocations[i] = allocate;
-            givingCircles[circleIndex].totalAllocated += allocate / weiMultiplier;
-            givingCircles[circleIndex].difference = givingCircles[circleIndex].erc20Allocated - givingCircles[circleIndex].totalAllocated;
+            // giftees[i] = givingCircles[circleIndex].proposals[i].giftAddress;
+            // allocations[i] = allocate;
 
+            givingCircles[circleIndex].totalAllocated += allocate;
+            // givingCircles[circleIndex].totalAllocated += allocate / weiMultiplier;
+            givingCircles[circleIndex].difference = givingCircles[circleIndex].erc20Allocated - givingCircles[circleIndex].totalAllocated;
         }
 
-        
-            emit GiftsAllocated(circleIndex, giftees, allocations);
-
+            emit GiftsAllocated(circleIndex);
+            // emit GiftsAllocated(circleIndex, giftees, allocations);
             return true;
-    }
-
-    function _calcUSDCperBean (uint256 circle_) internal virtual returns (uint) {
-        uint256 availableUSDC = givingCircles[circle_].erc20Allocated * weiMultiplier; // availableUSDC is 10**18
-        uint256 newusdcperbean = (availableUSDC) / givingCircles[circle_].numOfBeans; // numberator is large due to weiMultipler, total beans is decimal = 0.
-        givingCircles[circle_].USDCperBean = newusdcperbean;
-        return newusdcperbean; // availableUSDC is 10**18, thus minimizing rounding with small totalBeans uint (not 10**18).
     }
 
     //End Phase 2 Internal Functions
@@ -222,17 +256,21 @@ contract ATXDAOgivingCircle is AccessControl {
             );
 
             require (
-                USDC.balanceOf(msg.sender) >= (givingCircles[circleIndex].erc20Allocated * weiMultiplier), "not enough USDC to fund circle" // checks if circle leader has at least USDCperCircle 
+                USDC.balanceOf(msg.sender) >= (givingCircles[circleIndex].erc20Allocated), "not enough USDC to fund circle" // checks if circle leader has at least USDCperCircle 
+                // USDC.balanceOf(msg.sender) >= (givingCircles[circleIndex].erc20Allocated * weiMultiplier), "not enough USDC to fund circle" // checks if circle leader has at least USDCperCircle 
             );
 
-            USDC.transferFrom(msg.sender, address(this), givingCircles[circleIndex].erc20Allocated * weiMultiplier); // transfer USDC to the contract
+            USDC.transferFrom(msg.sender, address(this), givingCircles[circleIndex].erc20Allocated); // transfer USDC to the contract
+            // USDC.transferFrom(msg.sender, address(this), givingCircles[circleIndex].erc20Allocated * weiMultiplier); // transfer USDC to the contract
 
             //determine whether admin can fund in chunks
             // IF (USDC.balanceOf(adress(this) => ))
             givingCircles[circleIndex].circleFunded = true;
-            emit FundedCircle(circleIndex, givingCircles[circleIndex].erc20Allocated * weiMultiplier);
+            emit FundedCircle(circleIndex, givingCircles[circleIndex].erc20Allocated);
+            // emit FundedCircle(circleIndex, givingCircles[circleIndex].erc20Allocated * weiMultiplier);
     }
 
+    
     function redeemGift(uint256 circleIndex, uint256 proposalIndex) external {
         require(
             givingCircles[circleIndex].step == 3, "circle needs to be in gift redeem phase"
@@ -253,11 +291,22 @@ contract ATXDAOgivingCircle is AccessControl {
         address payable giftee = givingCircles[circleIndex].proposals[proposalIndex].giftAddress;
         //I think this line can get deleted. would like your confirmation.
         // totalUSDCpending -= redemptionqty / weiMultiplier; // reduce pending gifts by redeemed amount
-        totalUSDCgifted += redemptionqty / weiMultiplier; // divide by weiMultiplier to give whole number totalUSDCgifted metric
-        USDCgiftsReceived[msg.sender] += redemptionqty / weiMultiplier; // updates mapping to track total gifts withdrawn from contract
+        
+        totalUSDCgifted += redemptionqty;
+        // totalUSDCgifted += redemptionqty / weiMultiplier; // divide by weiMultiplier to give whole number totalUSDCgifted metric
+        USDCgiftsReceived[msg.sender] += redemptionqty;
+        // USDCgiftsReceived[msg.sender] += redemptionqty / weiMultiplier; // updates mapping to track total gifts withdrawn from contract
+
+        USDC.approve(address(this), redemptionqty);
         USDC.transferFrom(address(this), giftee, redemptionqty); // USDCgiftPending mapping is 10**18, thus so is redemptionqty
         emit GiftRedeemed(redemptionqty, giftee);
     }
+
+    function rollOverToIndex(uint256 startCircleIndex, uint256 endCircleIndex) public onlyRole(CIRCLE_LEADER_ROLE) {
+        givingCircles[endCircleIndex].erc20Allocated += givingCircles[startCircleIndex].difference;
+        givingCircles[startCircleIndex].difference = 0;
+    }
+    
     //End Phase 3 Core Functions
 
     // START UTILITY FUNCTIONS
@@ -322,32 +371,12 @@ contract ATXDAOgivingCircle is AccessControl {
 
     //START USDC FUNDING CODE
 
-    partialIERC20 public USDC; // implement USDC ERC20 interface with USDC contract address in constructor
 
-    uint public weiMultiplier; // utilized in various calcs to convert to ERC20 decimals
-
-    uint public totalUSDCgifted; // decimals = 0
-
-    // uint public totalUSDCpending; // decimals = 0
-
-    uint public USDCperCircle; // initially 1000 USDC per circle. decmials = 0 (multiplied by weiMultiplier in all calcs)
-
-    mapping (address => uint) public USDCgiftPending; // beanBalances have decimals of 10**18, always mirror changes in totalUSDCpending when changing mapping.
-    mapping (address => uint) public USDCgiftsReceived; // tracks total gifts withdrawn by proposers, decimals = 0
-
-    event FundedCircle(uint indexed circleNumb, uint256 amount); // emitted by proposeGift
-
-    // gift events
-    event GiftsAllocated(uint indexed circleNumb, address[] indexed giftrecipients, uint[] indexed giftamounts);  // emitted in _allocateGifts
-    event GiftRedeemed(uint indexed giftwithdrawn, address indexed withdrawee);  // emitted in redeemGift
 
     
 
 
-    function rollOverToIndex(uint256 startCircleIndex, uint256 endCircleIndex) public onlyRole(CIRCLE_LEADER_ROLE) {
-        givingCircles[endCircleIndex].erc20Allocated += givingCircles[startCircleIndex].difference;
-        givingCircles[startCircleIndex].difference = 0;
-    }
+    
 
     // @tlogs: 
     //         USDCperBean is 10**18 

@@ -53,18 +53,26 @@ describe("Giving Circle", function () {
     let bc2 = await contract.getBeanCountInCircle(0, attendee1.address);
     console.log(bc2);
 
-    await contract.connect(attendee1).placeBeans(0, 0, 3);
+    // await contract.connect(attendee1).placeBeans(0, 0, 3);
 
     let bc3 = await contract.getBeanCountInCircle(0, attendee1.address);
     console.log(bc3);
 
     await contract.closeCircleVoting(0);
 
+    await usdcDummyContract.approve(contract.address, 1000);
     await contract.fundGiftForCircle(0);
     
+    await contract.kycUser(attendee1.address);
+
+    let bo1= await usdcDummyContract.balanceOf(attendee1.address);
+    console.log(bo1);
+
     await contract.connect(attendee1).redeemGift(0, 0);
 
-    //step X: closeCircleVoting
+    let bo = await usdcDummyContract.balanceOf(attendee1.address);
+    console.log(bo);
+    
     return;
     expect(await contract.sayHello()).to.equal("hello");
   });
