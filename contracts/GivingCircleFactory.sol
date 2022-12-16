@@ -35,7 +35,7 @@ contract GivingCircleFactory is AccessControl {
         kycToReference = KYCController(addr);
     }
 
-    function initialize() public {
+    function initializeNewGivingCircle() public {
         // new GivingCircle(0,0,0,0,0, kycToReference);
     }
 
