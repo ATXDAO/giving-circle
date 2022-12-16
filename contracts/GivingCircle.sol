@@ -48,10 +48,11 @@ contract GivingCircle is AccessControl {
     event GiftRedeemed(uint indexed giftwithdrawn, address indexed withdrawee);  // emitted in redeemGift
     event FundedCircle(uint256 amount); // emitted by proposeGift
 
-    function initialize(address _circleLeader, address _circleAdmin, uint256 _beansToDispursePerAttendee) public {
+    function initialize(address _circleLeader, address _circleAdmin, uint256 _beansToDispursePerAttendee, address _kycController) public {
         _grantRole(CIRCLE_LEADER_ROLE, _circleLeader);
         _grantRole(CIRCLE_ADMIN_ROLE, _circleAdmin);
         erc20Token = partialIERC20(erc20Token);
+        kycController = KYCController(_kycController);
 
         erc20TokenPerBean = 0;
         step = 1;

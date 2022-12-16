@@ -5,6 +5,7 @@ pragma solidity ^0.8.17;
 
 import "./partialIERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "./KYCController.sol";
 
 //README README README README README README 
 //From my current understanding...the current implementation works all the way through perfectly or near perfectly.
@@ -27,6 +28,17 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 //can only redeem USDC if approved by an admin (aka Megan or multisig)
 
 contract GivingCircleFactory is AccessControl {
+
+    KYCController kycToReference;
+
+    function setImplementation(address addr) public onlyRole(CIRCLE_ADMIN_ROLE) {
+        kycToReference = KYCController(addr);
+    }
+
+    function initialize() public {
+        // new GivingCircle(0,0,0,0,0, kycToReference);
+    }
+
 
     struct GivingCircle {
         uint256 step;
