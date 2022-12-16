@@ -53,15 +53,13 @@ describe("Giving Circle", function () {
     let bc2 = await contract.getBeanCountInCircle(0, attendee1.address);
     console.log(bc2);
 
-    // await contract.connect(attendee1).placeBeans(0, 0, 3);
-
     let bc3 = await contract.getBeanCountInCircle(0, attendee1.address);
     console.log(bc3);
 
-    await contract.closeCircleVoting(0);
-
     await usdcDummyContract.approve(contract.address, 1000);
     await contract.fundGiftForCircle(0);
+
+    await contract.closeCircleVoting(0);
     
     await contract.kycUser(attendee1.address);
 
