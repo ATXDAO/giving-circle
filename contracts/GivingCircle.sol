@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import "./partialIERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "./KYCController.sol";
-import "./IGivingCircle.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "./IGivingCircle.sol";
+import "./KYCController.sol";
+import "./partialIERC20.sol";
 
 contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
@@ -17,7 +17,7 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         UNINITIALIZED, //Contract is not initialized. Cannot begin circle until no longer uninitalized.
         PROPOSAL_CREATION, //Register attendees, fund gifts, create new proposals, and progress phase to bean placement.
         BEAN_PLACEMENT, //Register attendees, fund gifts, place beans, and progress phase to gift redeem.
-        GIFT_REDEEM //Redeem gifts.
+        GIFT_REDEEM //Redeem gifts. Rollover leftover funds to a different circle.
     }
     Phase public phase;
 
