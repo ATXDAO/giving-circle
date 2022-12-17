@@ -31,7 +31,7 @@ contract GivingCircleFactory is AccessControl {
 
     KYCController kycToReference;
 
-    function setImplementation(address addr) public onlyRole(CIRCLE_ADMIN_ROLE) {
+    function setKycImplementation(address addr) public onlyRole(CIRCLE_ADMIN_ROLE) {
         kycToReference = KYCController(addr);
     }
 

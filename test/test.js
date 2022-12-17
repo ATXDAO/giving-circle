@@ -1,4 +1,5 @@
 const { expect } = require("chai");
+const { ethers } = require("hardhat");
 
 //uint256 step;
 //step 1: Proposal Creation Phase
@@ -9,6 +10,73 @@ const { expect } = require("chai");
 
 
 describe("Giving Circle", function () {
+
+
+  it("", async function () {
+    const [owner, attendee1, attendee2] = await ethers.getSigners();
+    
+    const Erc20TokenContract = await ethers.getContractFactory("TestERC20");
+    const erc20TokenContract = await Erc20TokenContract.deploy();
+    await erc20TokenContract.mint(1500);
+
+    const KYCController = await ethers.getContractFactory("KYCController");
+    const kycController = await KYCController.deploy(owner.address);
+
+    const GivingCircle = await ethers.getContractFactory("GivingCircle");
+    const givingCircle = await GivingCircle.deploy(owner.address, owner.address, 10, kycController.address, erc20TokenContract.address);
+
+    let attendeeCount1 = await givingCircle.attendeeCount();
+    console.log(attendeeCount1);
+
+    await givingCircle.registerAttendeeToCircle(attendee1.address);
+    
+    let attendeeCount2 = await givingCircle.attendeeCount();
+    console.log(attendeeCount2);
+
+    let attendees = await givingCircle.getAttendees();
+    console.log(attendees);
+
+    await givingCircle.createNewProposal(attendee1.address);
+    await givingCircle.createNewProposal(attendee2.address);
+
+    let proposalsCount = await givingCircle.proposalCount();
+    console.log(proposalsCount);
+
+    await givingCircle.closeProposalWindowAndAttendeeRegistration();
+
+    let bc = await givingCircle.getBeanCountForAttendee(attendee1.address);
+    console.log(bc);
+    await givingCircle.connect(attendee1).placeBeans(0, 7);
+
+    let bc2 = await givingCircle.getBeanCountForAttendee(attendee1.address);
+    console.log(bc2);
+
+    let bc3 = await givingCircle.getBeanCountForAttendee(attendee1.address);
+    console.log(bc3);
+
+    await erc20TokenContract.approve(givingCircle.address, 1000);
+
+    await givingCircle.fundGift(1000);
+
+    await givingCircle.closeCircleVoting();
+
+    await kycController.kycUser(attendee1.address);
+
+    let bo1= await erc20TokenContract.balanceOf(attendee1.address);
+    console.log(bo1);
+
+    await givingCircle.connect(attendee1).redeemGift(0);
+
+    let bo = await erc20TokenContract.balanceOf(attendee1.address);
+    console.log(bo);
+    
+   
+
+
+  });
+  return;
+
+
   it("", async function () {
     const [owner, attendee1, attendee2] = await ethers.getSigners();
 

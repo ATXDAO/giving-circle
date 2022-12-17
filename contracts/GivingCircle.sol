@@ -12,22 +12,22 @@ contract GivingCircle is AccessControl {
         address payable giftAddress;
     }
 
-    uint256 step;
+    uint256 public step;
     
-    uint256 proposalCount;
+    uint256 public proposalCount;
     mapping (uint256 => Proposal) proposals;
     
-    // uint256 erc20Allocated;
     uint256 totalAllocated;
     uint256 difference;
-    uint erc20TokenPerBean;
-    bool isFunded;
 
-    uint256 beansToDispursePerAttendee;
-    uint256 numOfBeans;
+    uint public erc20TokenPerBean;
+    bool public isFunded;
+
+    uint256 public  beansToDispursePerAttendee;
+    uint256 public numOfBeans;
     mapping (address => uint256) attendeeBeanCount;
     
-    uint256 attendeeCount;
+    uint256 public attendeeCount;
     mapping (uint256 => address) attendees;
 
     bytes32 public constant CIRCLE_LEADER_ROLE = keccak256("CIRCLE_LEADER_ROLE");
@@ -48,17 +48,20 @@ contract GivingCircle is AccessControl {
     event GiftRedeemed(uint indexed giftwithdrawn, address indexed withdrawee);  // emitted in redeemGift
     event FundedCircle(uint256 amount); // emitted by proposeGift
 
-    function initialize(address _circleLeader, address _circleAdmin, uint256 _beansToDispursePerAttendee, address _kycController) public {
+    constructor(address _circleLeader, address _circleAdmin, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token) {
+        initialize(_circleLeader, _circleAdmin, _beansToDispursePerAttendee, _kycController, _erc20Token);
+    }
+
+    function initialize(address _circleLeader, address _circleAdmin, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token) public {
         _grantRole(CIRCLE_LEADER_ROLE, _circleLeader);
         _grantRole(CIRCLE_ADMIN_ROLE, _circleAdmin);
-        erc20Token = partialIERC20(erc20Token);
+        erc20Token = partialIERC20(_erc20Token);
         kycController = KYCController(_kycController);
 
         erc20TokenPerBean = 0;
         step = 1;
         isFunded = false;
         proposalCount = 0;
-        // erc20Allocated = erc20Amount;
         beansToDispursePerAttendee = _beansToDispursePerAttendee;
     }
 
@@ -172,13 +175,13 @@ contract GivingCircle is AccessControl {
 
     //Start Phase 3 Core Functions
 
-    function fundGiftForCircle(uint256 amount) public payable onlyRole(CIRCLE_ADMIN_ROLE) {
+    function fundGift(uint256 amount) public payable onlyRole(CIRCLE_ADMIN_ROLE) {
             require(
                 isFunded == false, "Circle has already been funded!"
             );
 
             require (
-                erc20Token.balanceOf(msg.sender) >= amount, "not enough USDC to fund circle" // checks if circle leader has at least USDCperCircle 
+                erc20Token.balanceOf(msg.sender) >= amount, "not enough USDC to fund circle"
             );
 
             erc20Token.transferFrom(msg.sender, address(this), amount); // transfer USDC to the contract
@@ -221,4 +224,23 @@ contract GivingCircle is AccessControl {
     }
 
     //End Phase 3 Core Functions
+
+    function getAttendees() public view returns(address[] memory) {
+
+        address[] memory arr = new address[](attendeeCount);
+
+        for (uint256 i = 0; i < attendeeCount; i++) {
+            arr[i] = attendees[i];
+        }
+
+        return arr;
+    }
+
+    function getBeanCountForSender() public view returns(uint256) {
+        return getBeanCountForAttendee(msg.sender);
+    }
+
+    function getBeanCountForAttendee(address addr) public view returns(uint256) {
+        return attendeeBeanCount[addr];
+    }
 }
