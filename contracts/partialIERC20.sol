@@ -51,5 +51,15 @@ interface partialIERC20 {
     ) external returns (bool);
 
     function decimals() external view returns (uint8);
+    
+    /**
+     * @dev Moves `amount` tokens from the caller's account to `to`.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transfer(address to, uint256 amount) external returns (bool);
+
 
 }

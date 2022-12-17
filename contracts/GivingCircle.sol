@@ -10,10 +10,9 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
     bytes32 public constant LEADER_ROLE = keccak256("LEADER_ROLE");
-    bytes32 public constant FUNDER_ROLE = keccak256("FUNDER_ROLE");
     bytes32 public constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
 
-    enum Phase 
+    enum Phase
     {
         UNINITIALIZED, //Contract is not initialized. Cannot begin circle until no longer uninitalized.
         PROPOSAL_CREATION, //Register attendees, fund gifts, create new proposals, and progress phase to bean placement.
@@ -32,10 +31,7 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     uint256 public proposalCount;
     mapping (uint256 => Proposal) public proposals;
     
-    uint256 public unallocatedFunds;
-
     uint public erc20TokenPerBean;
-    bool public isFunded;
 
     uint256 public beansToDispursePerAttendee;
     uint256 public numOfBeans;
@@ -47,30 +43,31 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     partialIERC20 public erc20Token;
     KYCController public kycController;
 
+    uint256 public fundingThreshold;
+
     event ProposalCreated(uint indexed propNumb, address indexed giftrecipient);
     event BeansPlaced(uint indexed propNumb, uint indexed beansplaced, address indexed beanplacer); // emitted in placeBeans
     event GiftsAllocated();
     event VotingClosed();
     event GiftRedeemed(uint indexed giftwithdrawn, address indexed withdrawee);  // emitted in redeemGift
-    event FundedCircle(uint256 amount); // emitted by proposeGift
 
-    constructor(address _circleLeader, address _funder, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token) {
-        initialize(_circleLeader, _funder, _beansToDispursePerAttendee, _kycController, _erc20Token);
+    constructor(address _circleLeader, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token, uint256 _fundingThreshold) {
+        initialize(_circleLeader, _beansToDispursePerAttendee, _kycController, _erc20Token, _fundingThreshold);
     }
 
-    function initialize(address _circleLeader, address _funder, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token) public initializer {
+    function initialize(address _circleLeader, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token, uint256 _fundingThreshold) public initializer {
         
         _grantRole(LEADER_ROLE, _circleLeader);
-        _grantRole(FUNDER_ROLE, _funder);
         erc20Token = partialIERC20(_erc20Token);
         kycController = KYCController(_kycController);
 
         attendeeCount = 0;
         erc20TokenPerBean = 0;
         phase = Phase.PROPOSAL_CREATION;
-        isFunded = false;
         proposalCount = 0;
         beansToDispursePerAttendee = _beansToDispursePerAttendee;
+
+        fundingThreshold = _fundingThreshold;
     }
 
     //Start Phase 1 Core Functions
@@ -143,31 +140,16 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         emit BeansPlaced(proposalIndex, beanQuantity, msg.sender);
     }
 
+    //adding funds has been removed from the 
     function ProgressToGiftRedeemPhase() public onlyRole(LEADER_ROLE) {
         require(phase == Phase.BEAN_PLACEMENT, "circle needs to be in bean placement phase");
-        require(isFunded == true, "Circle needs to be funded first!");
+        require(erc20Token.balanceOf(address(this)) >= fundingThreshold, "Circle needs to be funded first!");
 
         _calcErc20TokenPerBean();
         _allocateGifts();
 
         phase = Phase.GIFT_REDEEM;
         emit VotingClosed();
-    }
-
-    function fundGift(uint256 amount) public payable onlyRole(FUNDER_ROLE) {
-        require(
-            isFunded == false, "Circle has already been funded!"
-        );
-
-        require (
-            erc20Token.balanceOf(msg.sender) >= amount, "not enough USDC to fund circle"
-        );
-
-        erc20Token.transferFrom(msg.sender, address(this), amount); // transfer USDC to the contract
-
-        isFunded = true;
-
-        emit FundedCircle(erc20Token.balanceOf(address(this)));
     }
 
     //Start Phase 2 Internal Functions
@@ -188,8 +170,6 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
             proposals[i].giftAmount = amountToAllocate;
             totalAllocated += amountToAllocate;
         }
-
-        unallocatedFunds = erc20Token.balanceOf(address(this)) - totalAllocated;
 
         emit GiftsAllocated();
     }
@@ -219,6 +199,11 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         }
     }
 
+    function rollOverToCircle(address otherCircle) public onlyRole(LEADER_ROLE) {
+        require(phase == Phase.GIFT_REDEEM, "circle needs to be in gift redeem phase");
+        erc20Token.transfer(otherCircle, getLeftoverFunds());
+    }
+
     //End Phase 3 Core Functions
 
     function getAttendees() public view returns(address[] memory) {
@@ -232,7 +217,54 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         return arr;
     }
 
-    function rollOverToCircle(address otherCircle) public onlyRole(LEADER_ROLE) {
-        erc20Token.transferFrom(address(this), otherCircle, unallocatedFunds);
+    function getProposals() public view returns(Proposal[] memory) {
+
+        Proposal[] memory arr = new Proposal[](proposalCount);
+
+        for (uint256 i = 0; i < proposalCount; i++) {
+            arr[i] = proposals[i];
+        }
+
+        return arr;
+    }
+
+    function getLeftoverFunds() public view returns(uint256) {
+        uint256 currentBalance = erc20Token.balanceOf(address(this));
+        uint256 currentRedeemedAmount = getTotalUnredeemedFunds();
+        return currentBalance - currentRedeemedAmount;
+    }
+
+    function getTotalRedeemedFunds() public view returns(uint256) {
+        uint256 total = 0;
+
+        for (uint256 i = 0; i < proposalCount; i++) {
+            if (proposals[i].hasRedeemed) {
+                total += proposals[i].giftAmount;
+            }
+        }
+
+        return total;
+    }
+
+    function getTotalUnredeemedFunds() public view returns(uint256) {
+        uint256 total = 0;
+
+        for (uint256 i = 0; i < proposalCount; i++) {
+            if (!proposals[i].hasRedeemed) {
+                total += proposals[i].giftAmount;
+            }
+        }
+
+        return total;
+    }
+
+    function getTotalAllocatedFunds() public view returns (uint256) {
+        uint256 total = 0;
+
+        for (uint256 i = 0; i < proposalCount; i++) {
+            total += proposals[i].giftAmount;
+        }
+
+        return total;
     }
 }

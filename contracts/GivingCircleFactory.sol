@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/proxy/Clones.sol";
 import "./IGivingCircle.sol";
 import "./partialIERC20.sol";
 
+//Will work really well when we can get a front end built
 contract GivingCircleFactory is AccessControl {
 
     uint256 public givingCirclesCount;
@@ -15,14 +16,14 @@ contract GivingCircleFactory is AccessControl {
 
     event CreatedNewCircle(address);
 
-    function createGivingCircle(address _circleLeader, address _circleAdmin, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token) public {
+    function createGivingCircle(address _circleLeader, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token, uint256 _fundingThreshold) public {
         address clone = Clones.clone(address(implementation));
         IGivingCircle(clone).initialize(
             _circleLeader,
-            _circleAdmin,
             _beansToDispursePerAttendee,
             _kycController,
-            _erc20Token
+            _erc20Token,
+            _fundingThreshold
         );
 
         givingCircles[givingCirclesCount] = clone;

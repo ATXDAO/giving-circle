@@ -9,6 +9,8 @@ const { ethers } = require("hardhat");
 describe("Giving Circle", function () {
 
   it("", async function () {
+
+    return;
     const [owner, giftRecipient1, attendee1] = await ethers.getSigners();
 
     const Erc20TokenContract = await ethers.getContractFactory("TestERC20");
@@ -19,7 +21,7 @@ describe("Giving Circle", function () {
     const kycController = await KYCController.deploy(owner.address);
 
     const GivingCircleImplementation = await ethers.getContractFactory("GivingCircle");
-    const givingCircleImplementation = await GivingCircleImplementation.deploy(owner.address, owner.address, 10, kycController.address, erc20TokenContract.address);
+    const givingCircleImplementation = await GivingCircleImplementation.deploy(owner.address, 10, kycController.address, erc20TokenContract.address, 1000);
 
     const GivingCircleFactory = await ethers.getContractFactory("GivingCircleFactory");
     const givingCircleFactory = await GivingCircleFactory.deploy();
@@ -27,7 +29,7 @@ describe("Giving Circle", function () {
     let impl = await givingCircleFactory.implementation();
     console.log(impl);
 
-    await givingCircleFactory.createGivingCircle(owner.address, owner.address, 10, kycController.address, erc20TokenContract.address);
+    await givingCircleFactory.createGivingCircle(owner.address, 10, kycController.address, erc20TokenContract.address, 1000);
     
     let count = await givingCircleFactory.givingCirclesCount();
     console.log(count);
@@ -47,8 +49,8 @@ describe("Giving Circle", function () {
     const kycController = await KYCController.deploy(owner.address);
 
     const GivingCircle = await ethers.getContractFactory("GivingCircle");
-    const givingCircle = await GivingCircle.deploy(owner.address, owner.address, 10, kycController.address, erc20TokenContract.address);
-
+    const givingCircle = await GivingCircle.deploy(owner.address, 10, kycController.address, erc20TokenContract.address, 1000);
+    
     let attendeeCount1 = await givingCircle.attendeeCount();
     console.log(attendeeCount1);
 
@@ -79,11 +81,11 @@ describe("Giving Circle", function () {
     let bc3 = await givingCircle.attendeeBeanCount(attendee1.address);
     console.log(bc3);
 
-    await erc20TokenContract.approve(givingCircle.address, 1000);
-
-    await givingCircle.fundGift(1000);
+    await erc20TokenContract.transfer(givingCircle.address, 1000);
 
     await givingCircle.ProgressToGiftRedeemPhase();
+
+    await erc20TokenContract.transfer(givingCircle.address, 300);
 
     await kycController.kycUser(attendee1.address);
     await kycController.kycUser(attendee2.address);
@@ -104,8 +106,14 @@ describe("Giving Circle", function () {
     let bo4 = await erc20TokenContract.balanceOf(attendee2.address);
     console.log(bo4);
 
-    let i = await givingCircle.unallocatedFunds();
+    await erc20TokenContract.transfer(givingCircle.address, 200);
 
+    let i = await givingCircle.getLeftoverFunds();
     console.log(i);
+
+    let j = await givingCircle.getProposals();
+    console.log(j);
+    return;
+
   });
 });
