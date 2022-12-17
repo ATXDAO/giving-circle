@@ -4,42 +4,48 @@ pragma solidity ^0.8.17;
 import "./partialIERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "./KYCController.sol";
+import "./IGivingCircle.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-contract GivingCircle is AccessControl {
+contract GivingCircle is IGivingCircle, AccessControl, Initializable {
+
+    bytes32 public constant LEADER_ROLE = keccak256("LEADER_ROLE");
+    bytes32 public constant FUNDER_ROLE = keccak256("FUNDER_ROLE");
+    bytes32 public constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
+
+    enum Phase 
+    {
+        UNINITIALIZED, //Contract is not initialized. Cannot begin circle until no longer uninitalized.
+        PROPOSAL_CREATION, //Register attendees, fund gifts, create new proposals, and progress phase to bean placement.
+        BEAN_PLACEMENT, //Register attendees, fund gifts, place beans, and progress phase to gift redeem.
+        GIFT_REDEEM //Redeem gifts.
+    }
+    Phase public phase;
 
     struct Proposal {
         uint beansReceived;
+        uint256 giftAmount;
+        bool hasRedeemed;
         address payable giftAddress;
     }
 
-    uint256 public step;
-    
     uint256 public proposalCount;
-    mapping (uint256 => Proposal) proposals;
+    mapping (uint256 => Proposal) public proposals;
     
-    uint256 totalAllocated;
-    uint256 difference;
+    uint256 public unallocatedFunds;
 
     uint public erc20TokenPerBean;
     bool public isFunded;
 
-    uint256 public  beansToDispursePerAttendee;
+    uint256 public beansToDispursePerAttendee;
     uint256 public numOfBeans;
-    mapping (address => uint256) attendeeBeanCount;
+    mapping (address => uint256) public attendeeBeanCount;
     
     uint256 public attendeeCount;
-    mapping (uint256 => address) attendees;
-
-    bytes32 public constant CIRCLE_LEADER_ROLE = keccak256("CIRCLE_LEADER_ROLE");
-    bytes32 public constant CIRCLE_ADMIN_ROLE = keccak256("CIRCLE_ADMIN_ROLE");
+    mapping (uint256 => address) public attendees;
 
     partialIERC20 public erc20Token;
     KYCController public kycController;
-
-    uint public totalUSDCgifted; // decimals = 0
-
-    mapping (address => uint) public USDCgiftPending;
-    mapping (address => uint) public USDCgiftsReceived; // tracks total gifts withdrawn by proposers, decimals = 0
 
     event ProposalCreated(uint indexed propNumb, address indexed giftrecipient);
     event BeansPlaced(uint indexed propNumb, uint indexed beansplaced, address indexed beanplacer); // emitted in placeBeans
@@ -48,18 +54,20 @@ contract GivingCircle is AccessControl {
     event GiftRedeemed(uint indexed giftwithdrawn, address indexed withdrawee);  // emitted in redeemGift
     event FundedCircle(uint256 amount); // emitted by proposeGift
 
-    constructor(address _circleLeader, address _circleAdmin, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token) {
-        initialize(_circleLeader, _circleAdmin, _beansToDispursePerAttendee, _kycController, _erc20Token);
+    constructor(address _circleLeader, address _funder, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token) {
+        initialize(_circleLeader, _funder, _beansToDispursePerAttendee, _kycController, _erc20Token);
     }
 
-    function initialize(address _circleLeader, address _circleAdmin, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token) public {
-        _grantRole(CIRCLE_LEADER_ROLE, _circleLeader);
-        _grantRole(CIRCLE_ADMIN_ROLE, _circleAdmin);
+    function initialize(address _circleLeader, address _funder, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token) public initializer {
+        
+        _grantRole(LEADER_ROLE, _circleLeader);
+        _grantRole(FUNDER_ROLE, _funder);
         erc20Token = partialIERC20(_erc20Token);
         kycController = KYCController(_kycController);
 
+        attendeeCount = 0;
         erc20TokenPerBean = 0;
-        step = 1;
+        phase = Phase.PROPOSAL_CREATION;
         isFunded = false;
         proposalCount = 0;
         beansToDispursePerAttendee = _beansToDispursePerAttendee;
@@ -67,14 +75,12 @@ contract GivingCircle is AccessControl {
 
     //Start Phase 1 Core Functions
 
-    function createNewProposal(address payable giftRecipient) public onlyRole(CIRCLE_LEADER_ROLE) {
-        require(step == 1, "circle needs to be in proposal creation phase.");
+    function createNewProposal(address payable giftRecipient) public onlyRole(LEADER_ROLE) {
+        require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
 
-        for (uint256 i = 0; i < proposalCount; i++) {
-            if (proposals[i].giftAddress == giftRecipient) {
-                revert("Recipient already present in proposal!");
-            }
-        }
+        require(!hasRole(PROPOSER_ROLE, giftRecipient), "Recipient already present in proposal!");
+
+        _grantRole(PROPOSER_ROLE, giftRecipient);
 
         uint256 proposalIndex = proposalCount;
         Proposal storage newProposal = proposals[proposalIndex];
@@ -88,17 +94,17 @@ contract GivingCircle is AccessControl {
 
     //In current setup, allows for Megan or circle leader to mass add a list of arrays if they chose to gather them all beforehand
     //or at the event.
-    function registerAttendeesToCircle(address[] memory addrs) public onlyRole(CIRCLE_LEADER_ROLE) {
+    function registerAttendees(address[] memory addrs) public onlyRole(LEADER_ROLE) {
         for (uint256 i = 0; i < addrs.length; i++) {
-            registerAttendeeToCircle(addrs[i]);
+            registerAttendee(addrs[i]);
         }
     }
 
     //In current setup, allows for an iPad to reach a server from a QR code scanned by a wallet. - More offhands approach
-    function registerAttendeeToCircle(address addr) public onlyRole(CIRCLE_LEADER_ROLE) {
+    function registerAttendee(address addr) public onlyRole(LEADER_ROLE) {
         require (
-            step == 1 ||
-            step == 2,
+            phase == Phase.PROPOSAL_CREATION ||
+            phase == Phase.BEAN_PLACEMENT,
             "circle needs to be in the proposal creation or bean placement phases."
         );
 
@@ -117,9 +123,9 @@ contract GivingCircle is AccessControl {
         }
     }
 
-    function closeProposalWindowAndAttendeeRegistration() public onlyRole(CIRCLE_LEADER_ROLE) {
-        require(step == 1, "circle needs to be in proposal creation phase.");
-        step = 2;
+    function ProgressToBeanPlacementPhase() public onlyRole(LEADER_ROLE) {
+        require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
+        phase = Phase.BEAN_PLACEMENT;
     }
 
     //End Phase 1 Core Functions
@@ -127,7 +133,7 @@ contract GivingCircle is AccessControl {
     //Start Phase 2 Core Functions
     function placeBeans(uint256 proposalIndex, uint256 beanQuantity) external {
         require (
-            step == 2, "circle needs to be in bean placement phase."
+            phase == Phase.BEAN_PLACEMENT, "circle needs to be in bean placement phase."
         );
 
         require(attendeeBeanCount[msg.sender] >= beanQuantity, "not enough beans held to place bean quantity.");
@@ -137,15 +143,31 @@ contract GivingCircle is AccessControl {
         emit BeansPlaced(proposalIndex, beanQuantity, msg.sender);
     }
 
-    function closeCircleVoting() public onlyRole(CIRCLE_LEADER_ROLE) {
-        require(step == 2, "circle needs to be in bean placement phase");
+    function ProgressToGiftRedeemPhase() public onlyRole(LEADER_ROLE) {
+        require(phase == Phase.BEAN_PLACEMENT, "circle needs to be in bean placement phase");
         require(isFunded == true, "Circle needs to be funded first!");
-
-        step = 3;
 
         _calcErc20TokenPerBean();
         _allocateGifts();
+
+        phase = Phase.GIFT_REDEEM;
         emit VotingClosed();
+    }
+
+    function fundGift(uint256 amount) public payable onlyRole(FUNDER_ROLE) {
+        require(
+            isFunded == false, "Circle has already been funded!"
+        );
+
+        require (
+            erc20Token.balanceOf(msg.sender) >= amount, "not enough USDC to fund circle"
+        );
+
+        erc20Token.transferFrom(msg.sender, address(this), amount); // transfer USDC to the contract
+
+        isFunded = true;
+
+        emit FundedCircle(erc20Token.balanceOf(address(this)));
     }
 
     //Start Phase 2 Internal Functions
@@ -160,67 +182,41 @@ contract GivingCircle is AccessControl {
 
     function _allocateGifts () internal { 
 
+        uint256 totalAllocated;
         for (uint i = 0; i < proposalCount; i++) {
-            uint256 allocate = proposals[i].beansReceived * erc20TokenPerBean; // beans received is decimal 0, erc20TokenPerBean is decimal 10**18, thus allocate is 10**18
-
-            USDCgiftPending[proposals[i].giftAddress] += allocate; // utilizes 10**18
-            totalAllocated += allocate;
-            difference = erc20Token.balanceOf(address(this)) - totalAllocated;
+            uint256 amountToAllocate = proposals[i].beansReceived * erc20TokenPerBean;
+            proposals[i].giftAmount = amountToAllocate;
+            totalAllocated += amountToAllocate;
         }
+
+        unallocatedFunds = erc20Token.balanceOf(address(this)) - totalAllocated;
 
         emit GiftsAllocated();
     }
 
     //End Phase 2 Internal Functions
 
-    //Start Phase 3 Core Functions
+    //Start Phase 3 Core Functions    
 
-    function fundGift(uint256 amount) public payable onlyRole(CIRCLE_ADMIN_ROLE) {
-            require(
-                isFunded == false, "Circle has already been funded!"
-            );
-
-            require (
-                erc20Token.balanceOf(msg.sender) >= amount, "not enough USDC to fund circle"
-            );
-
-            erc20Token.transferFrom(msg.sender, address(this), amount); // transfer USDC to the contract
-
-            //determine whether admin can fund in chunks
-            // IF (USDC.balanceOf(adress(this) => ))
-            isFunded = true;
-
-            // uint256 amount = 
-            emit FundedCircle(erc20Token.balanceOf(address(this)));
-    }
-
-    
-    function redeemGift(uint256 proposalIndex) external {
+    function redeemMyGift() external onlyRole(PROPOSER_ROLE) {
         require(
-            step == 3, "circle needs to be in gift redeem phase"
-        );
-        require(
-            proposals[proposalIndex].giftAddress == msg.sender, "This is not your gift!"
-        );
-        require(
-            kycController.isUserKyced(msg.sender), "You need to be KYCed first!"
+            phase == Phase.GIFT_REDEEM, "circle needs to be in gift redeem phase"
         );
 
-        //not tested to work
-        uint256 redemptionqty = USDCgiftPending[msg.sender]; // will be 10**18
-        USDCgiftPending[msg.sender] = 0;
-        address payable giftee = proposals[proposalIndex].giftAddress;
-        //I think this line can get deleted. would like your confirmation.
-        // totalUSDCpending -= redemptionqty / weiMultiplier; // reduce pending gifts by redeemed amount
-        
-        totalUSDCgifted += redemptionqty;
-        // totalUSDCgifted += redemptionqty / weiMultiplier; // divide by weiMultiplier to give whole number totalUSDCgifted metric
-        USDCgiftsReceived[msg.sender] += redemptionqty;
-        // USDCgiftsReceived[msg.sender] += redemptionqty / weiMultiplier; // updates mapping to track total gifts withdrawn from contract
+        require(kycController.isUserKyced(msg.sender), "You need to be KYCed first!");
 
-        erc20Token.approve(address(this), redemptionqty);
-        erc20Token.transferFrom(address(this), giftee, redemptionqty); // USDCgiftPending mapping is 10**18, thus so is redemptionqty
-        emit GiftRedeemed(redemptionqty, giftee);
+        for (uint256 i = 0; i < proposalCount; i++) {
+            if (proposals[i].giftAddress == msg.sender) {
+                
+                require(!proposals[i].hasRedeemed, "You already redeemed your gift!");
+
+                erc20Token.approve(address(this), proposals[i].giftAmount);
+                erc20Token.transferFrom(address(this), proposals[i].giftAddress, proposals[i].giftAmount); // USDCgiftPending mapping is 10**18, thus so is redemptionqty
+                proposals[i].hasRedeemed = true;
+                emit GiftRedeemed(proposals[i].giftAmount, proposals[i].giftAddress);
+                break;
+            }
+        }
     }
 
     //End Phase 3 Core Functions
@@ -236,11 +232,7 @@ contract GivingCircle is AccessControl {
         return arr;
     }
 
-    function getBeanCountForSender() public view returns(uint256) {
-        return getBeanCountForAttendee(msg.sender);
-    }
-
-    function getBeanCountForAttendee(address addr) public view returns(uint256) {
-        return attendeeBeanCount[addr];
+    function rollOverToCircle(address otherCircle) public onlyRole(LEADER_ROLE) {
+        erc20Token.transferFrom(address(this), otherCircle, unallocatedFunds);
     }
 }

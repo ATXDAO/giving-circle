@@ -6,11 +6,35 @@ const { ethers } = require("hardhat");
 //step 2: Bean Placement Phase
 //step 3: Gift Redeem Phase
 
-
-
-
 describe("Giving Circle", function () {
 
+  it("", async function () {
+    const [owner, giftRecipient1, attendee1] = await ethers.getSigners();
+
+    const Erc20TokenContract = await ethers.getContractFactory("TestERC20");
+    const erc20TokenContract = await Erc20TokenContract.deploy();
+    await erc20TokenContract.mint(1500);
+
+    const KYCController = await ethers.getContractFactory("KYCController");
+    const kycController = await KYCController.deploy(owner.address);
+
+    const GivingCircleImplementation = await ethers.getContractFactory("GivingCircle");
+    const givingCircleImplementation = await GivingCircleImplementation.deploy(owner.address, owner.address, 10, kycController.address, erc20TokenContract.address);
+
+    const GivingCircleFactory = await ethers.getContractFactory("GivingCircleFactory");
+    const givingCircleFactory = await GivingCircleFactory.deploy();
+    await givingCircleFactory.setImplementation(givingCircleImplementation.address);
+    let impl = await givingCircleFactory.implementation();
+    console.log(impl);
+
+    await givingCircleFactory.createGivingCircle(owner.address, owner.address, 10, kycController.address, erc20TokenContract.address);
+    
+    let count = await givingCircleFactory.givingCirclesCount();
+    console.log(count);
+
+    let addr = await givingCircleFactory.givingCircles(0);
+    console.log(addr);
+  });
 
   it("", async function () {
     const [owner, attendee1, attendee2] = await ethers.getSigners();
@@ -28,7 +52,7 @@ describe("Giving Circle", function () {
     let attendeeCount1 = await givingCircle.attendeeCount();
     console.log(attendeeCount1);
 
-    await givingCircle.registerAttendeeToCircle(attendee1.address);
+    await givingCircle.registerAttendee(attendee1.address);
     
     let attendeeCount2 = await givingCircle.attendeeCount();
     console.log(attendeeCount2);
@@ -42,104 +66,46 @@ describe("Giving Circle", function () {
     let proposalsCount = await givingCircle.proposalCount();
     console.log(proposalsCount);
 
-    await givingCircle.closeProposalWindowAndAttendeeRegistration();
+    await givingCircle.ProgressToBeanPlacementPhase();
 
-    let bc = await givingCircle.getBeanCountForAttendee(attendee1.address);
+    let bc = await givingCircle.attendeeBeanCount(attendee1.address);
     console.log(bc);
     await givingCircle.connect(attendee1).placeBeans(0, 7);
+    await givingCircle.connect(attendee1).placeBeans(1, 2);
 
-    let bc2 = await givingCircle.getBeanCountForAttendee(attendee1.address);
+    let bc2 = await givingCircle.attendeeBeanCount(attendee1.address);
     console.log(bc2);
 
-    let bc3 = await givingCircle.getBeanCountForAttendee(attendee1.address);
+    let bc3 = await givingCircle.attendeeBeanCount(attendee1.address);
     console.log(bc3);
 
     await erc20TokenContract.approve(givingCircle.address, 1000);
 
     await givingCircle.fundGift(1000);
 
-    await givingCircle.closeCircleVoting();
+    await givingCircle.ProgressToGiftRedeemPhase();
 
     await kycController.kycUser(attendee1.address);
+    await kycController.kycUser(attendee2.address);
 
     let bo1= await erc20TokenContract.balanceOf(attendee1.address);
     console.log(bo1);
 
-    await givingCircle.connect(attendee1).redeemGift(0);
+    await givingCircle.connect(attendee1).redeemMyGift();
 
     let bo = await erc20TokenContract.balanceOf(attendee1.address);
     console.log(bo);
-    
-   
 
+    let bo3 = await erc20TokenContract.balanceOf(attendee2.address);
+    console.log(bo3);
 
-  });
-  return;
+    await givingCircle.connect(attendee2).redeemMyGift();
 
+    let bo4 = await erc20TokenContract.balanceOf(attendee2.address);
+    console.log(bo4);
 
-  it("", async function () {
-    const [owner, attendee1, attendee2] = await ethers.getSigners();
+    let i = await givingCircle.unallocatedFunds();
 
-    const UsdcDummyContract = await ethers.getContractFactory("TestERC20");
-    const usdcDummyContract = await UsdcDummyContract.deploy();
-    await usdcDummyContract.mint(15000);
-
-    const Contract = await ethers.getContractFactory("ATXDAOgivingCircle");
-
-    const contract = await Contract.deploy(usdcDummyContract.address, owner.address, owner.address);
-    let count = await contract.circleCount();
-    console.log(count);
-    
-    await contract.createNewCircleAndOpenProposalWindowAndAttendeeRegistration(1000, 10);
-    
-    let count2 = await contract.circleCount();
-    console.log(count2);
-
-    let attendeeCount1 = await contract.getAttendeeAmountInCircle(0);
-    console.log(attendeeCount1);
-
-    await contract.registerAttendeeToCircle(0, attendee1.address);
-    
-    let attendeeCount2 = await contract.getAttendeeAmountInCircle(0);
-    console.log(attendeeCount2);
-
-    let attendees = await contract.getAttendeesInCircle(0);
-    console.log(attendees);
-
-    await contract.createNewProposal(0, attendee1.address);
-    await contract.createNewProposal(0, attendee2.address);
-
-    let proposalsCount = await contract.getProposalCountInCircle(0);
-    console.log(proposalsCount);
-
-    await contract.closeProposalWindowAndAttendeeRegistration(0);
-
-    let bc = await contract.getBeanCountInCircle(0, attendee1.address);
-    console.log(bc);
-    await contract.connect(attendee1).placeBeans(0, 0, 7);
-
-    let bc2 = await contract.getBeanCountInCircle(0, attendee1.address);
-    console.log(bc2);
-
-    let bc3 = await contract.getBeanCountInCircle(0, attendee1.address);
-    console.log(bc3);
-
-    await usdcDummyContract.approve(contract.address, 1000);
-    await contract.fundGiftForCircle(0);
-
-    await contract.closeCircleVoting(0);
-    
-    await contract.kycUser(attendee1.address);
-
-    let bo1= await usdcDummyContract.balanceOf(attendee1.address);
-    console.log(bo1);
-
-    await contract.connect(attendee1).redeemGift(0, 0);
-
-    let bo = await usdcDummyContract.balanceOf(attendee1.address);
-    console.log(bo);
-    
-    return;
-    expect(await contract.sayHello()).to.equal("hello");
+    console.log(i);
   });
 });
