@@ -6,6 +6,6 @@ library Proposals {
         uint beansReceived;
         uint256 giftAmount;
         bool hasRedeemed;
-        address payable giftAddress;
+        address payable proposer;
     }
 }

@@ -15,6 +15,7 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     bytes32 public constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
     bytes32 public constant SPECIAL_BEAN_PLACER_ROLE = keccak256("SPECIAL_BEAN_PLACER_ROLE");
     bytes32 public constant SPECIAL_GIFT_REDEEMER_ROLE = keccak256("SPECIAL_GIFT_REDEEMER_ROLE");
+    
     enum Phase
     {
         UNINITIALIZED, //Contract is not initialized. Cannot begin circle until no longer uninitalized.
@@ -24,22 +25,21 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     }
     Phase public phase;
 
-    uint256 public proposalCount;
-    mapping (uint256 => Proposals.Proposal) public proposals;
-    
-    uint public erc20TokenPerBean;
-
     uint256 public beansToDispursePerAttendee;
+    uint256 public fundingThreshold;
+
+    uint256 public proposalCount;
+    mapping(uint256 => Proposals.Proposal) public proposals;
     
     uint256 public attendeeCount;
-    mapping(uint256 => Attendees.Attendee) attendees;
+    mapping(uint256 => Attendees.Attendee) public attendees;
 
     partialIERC20 public erc20Token;
     KYCController public kycController;
 
-    uint256 public fundingThreshold;
+    uint public erc20TokenPerBean;
 
-    event ProposalCreated(uint indexed propNumb, address indexed giftrecipient);
+    event ProposalCreated(uint indexed propNumb, address indexed proposer);
     event BeansPlaced(uint indexed propNumb, uint indexed beansplaced, address indexed beanplacer); // emitted in placeBeans
     event GiftsAllocated();
     event VotingClosed();
@@ -54,9 +54,9 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         phase = Phase.PROPOSAL_CREATION;
         beansToDispursePerAttendee = init.beansToDispursePerAttendee;
         fundingThreshold = init.fundingThreshold;
+        proposalCount = 0;
         attendeeCount = 0;
         erc20TokenPerBean = 0;
-        proposalCount = 0;
 
         for (uint256 i = 0; i < init.circleLeaders.length; i++) {
             _grantRole(LEADER_ROLE, init.circleLeaders[i]);
@@ -77,21 +77,20 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
     //Start Phase 1 Core Functions
 
-    function createNewProposal(address payable giftRecipient) public onlyRole(LEADER_ROLE) {
+    function createNewProposal(address payable proposer) public onlyRole(LEADER_ROLE) {
         require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
+        require(!hasRole(PROPOSER_ROLE, proposer), "Recipient already present in proposal!");
 
-        require(!hasRole(PROPOSER_ROLE, giftRecipient), "Recipient already present in proposal!");
-
-        _grantRole(PROPOSER_ROLE, giftRecipient);
+        _grantRole(PROPOSER_ROLE, proposer);
 
         uint256 proposalIndex = proposalCount;
         Proposals.Proposal storage newProposal = proposals[proposalIndex];
         newProposal.beansReceived = 0;
-        newProposal.giftAddress = giftRecipient;
+        newProposal.proposer = proposer;
 
         proposalCount++;
 
-        emit ProposalCreated(proposalIndex, giftRecipient);
+        emit ProposalCreated(proposalIndex, proposer);
     }
 
     //In current setup, allows for Megan or circle leader to mass add a list of arrays if they chose to gather them all beforehand
@@ -209,14 +208,14 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         require(kycController.isUserKyced(addr), "You need to be KYCed first!");
 
         for (uint256 i = 0; i < proposalCount; i++) {
-            if (proposals[i].giftAddress == addr) {
+            if (proposals[i].proposer == addr) {
                 
                 require(!proposals[i].hasRedeemed, "You already redeemed your gift!");
 
                 erc20Token.approve(address(this), proposals[i].giftAmount);
-                erc20Token.transferFrom(address(this), proposals[i].giftAddress, proposals[i].giftAmount); // USDCgiftPending mapping is 10**18, thus so is redemptionqty
+                erc20Token.transferFrom(address(this), proposals[i].proposer, proposals[i].giftAmount); // USDCgiftPending mapping is 10**18, thus so is redemptionqty
                 proposals[i].hasRedeemed = true;
-                emit GiftRedeemed(proposals[i].giftAmount, proposals[i].giftAddress);
+                emit GiftRedeemed(proposals[i].giftAmount, proposals[i].proposer);
                 break;
             }
         }
