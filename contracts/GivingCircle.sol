@@ -33,9 +33,7 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     uint256 public numOfBeans;
     
     uint256 public attendeeCount;
-    mapping (uint256 => address) public attendees;
-    mapping (uint256 => uint256) beansAvailable;
-
+    mapping(uint256 => Attendees.Attendee) attendees;
 
     partialIERC20 public erc20Token;
     KYCController public kycController;
@@ -115,7 +113,7 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
         bool isPresent = false;
         for (uint256 i = 0; i < attendeeCount; i++) {
-            if (addr == attendees[i]) {
+            if (addr == attendees[i].addr) {
                 revert("Supplied address is already present in the number of attendees.");
             }
         }
@@ -123,8 +121,8 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         if (!isPresent) {
             numOfBeans += beansToDispursePerAttendee;
 
-            attendees[attendeeCount] = addr;
-            beansAvailable[attendeeCount] = beansToDispursePerAttendee;
+            attendees[attendeeCount].addr = addr;
+            attendees[attendeeCount].beansAvailable = beansToDispursePerAttendee;
             attendeeCount++;
         }
     }
@@ -144,10 +142,10 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
         bool isPresent = false;
         for (uint256 i = 0; i < attendeeCount; i++) {
-            if (attendees[i] == attendee) {
-                require(beansAvailable[i] >= beanQuantity, "not enough beans held to place bean quantity.");
+            if (attendees[i].addr == attendee) {
+                require(attendees[i].beansAvailable >= beanQuantity, "not enough beans held to place bean quantity.");
 
-                beansAvailable[i] -= beanQuantity;
+                attendees[i].beansAvailable -= beanQuantity;
                 proposals[proposalIndex].beansReceived += beanQuantity;
                 
                 isPresent = true;
@@ -241,9 +239,9 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     //End Phase 3 Core Functions
 
     //Helper Functions
-    function getAttendees() public view returns(address[] memory) {
+    function getAttendees() public view returns(Attendees.Attendee[] memory) {
 
-        address[] memory arr = new address[](attendeeCount);
+        Attendees.Attendee[] memory arr = new Attendees.Attendee[](attendeeCount);
 
         for (uint256 i = 0; i < arr.length; i++) {
             arr[i] = attendees[i];
@@ -266,8 +264,8 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     function getAvailableBeans(address addr) external view returns(uint256) {
 
         for (uint256 i = 0; i < attendeeCount; i++) {
-            if (attendees[i] == addr) {
-                return beansAvailable[i];
+            if (attendees[i].addr == addr) {
+                return attendees[i].beansAvailable;
             }
         }
 

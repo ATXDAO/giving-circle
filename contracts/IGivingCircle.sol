@@ -4,7 +4,7 @@ pragma solidity ^0.8.17;
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 import "./Initialization.sol";
 import "./Proposals.sol";
-
+import "./Attendees.sol";
 
 interface IGivingCircle is IAccessControl {
     function initialize(Initialization.GivingCircleInitialization memory init) external;
@@ -14,7 +14,7 @@ interface IGivingCircle is IAccessControl {
     function registerAttendees(address[] memory addrs) external;
 
     function attendeeCount() external view returns(uint256);
-    function getAttendees() external view returns(address[] memory);
+    function getAttendees() external view returns(Attendees.Attendee[] memory);
 
     function LEADER_ROLE() external view returns(bytes32);
 

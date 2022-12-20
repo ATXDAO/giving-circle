@@ -7,8 +7,8 @@ import "./IGivingCircle.sol";
 import "./partialIERC20.sol";
 import "./Initialization.sol";
 import "./Proposals.sol";
+import "./Attendees.sol";
 
-//Will work really well when we can get a front end built
 contract GivingCircleFactory is AccessControl {
 
     uint256 public instancesCount;
@@ -80,7 +80,7 @@ contract GivingCircleFactory is AccessControl {
         return instances[index].attendeeCount();
     }
 
-    function getAttendees(uint256 index) external view returns(address[] memory) {
+    function getAttendees(uint256 index) external view returns(Attendees.Attendee[] memory) {
         return instances[index].getAttendees();
     }
 
@@ -101,7 +101,6 @@ contract GivingCircleFactory is AccessControl {
     }
 
     //End Circle Interaction Functions
-
 
     // import "./KYCController.sol";
 
