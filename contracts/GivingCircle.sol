@@ -6,12 +6,15 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./IGivingCircle.sol";
 import "./KYCController.sol";
 import "./partialIERC20.sol";
+import "./Initialization.sol";
+import "./Proposals.sol";
 
 contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
     bytes32 public constant LEADER_ROLE = keccak256("LEADER_ROLE");
     bytes32 public constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
-
+    bytes32 public constant SPECIAL_BEAN_PLACER_ROLE = keccak256("SPECIAL_BEAN_PLACER_ROLE");
+    bytes32 public constant SPECIAL_GIFT_REDEEMER_ROLE = keccak256("SPECIAL_GIFT_REDEEMER_ROLE");
     enum Phase
     {
         UNINITIALIZED, //Contract is not initialized. Cannot begin circle until no longer uninitalized.
@@ -21,24 +24,18 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     }
     Phase public phase;
 
-    struct Proposal {
-        uint beansReceived;
-        uint256 giftAmount;
-        bool hasRedeemed;
-        address payable giftAddress;
-    }
-
     uint256 public proposalCount;
-    mapping (uint256 => Proposal) public proposals;
+    mapping (uint256 => Proposals.Proposal) public proposals;
     
     uint public erc20TokenPerBean;
 
     uint256 public beansToDispursePerAttendee;
     uint256 public numOfBeans;
-    mapping (address => uint256) public attendeeBeanCount;
     
     uint256 public attendeeCount;
     mapping (uint256 => address) public attendees;
+    mapping (uint256 => uint256) beansAvailable;
+
 
     partialIERC20 public erc20Token;
     KYCController public kycController;
@@ -51,23 +48,34 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     event VotingClosed();
     event GiftRedeemed(uint indexed giftwithdrawn, address indexed withdrawee);  // emitted in redeemGift
 
-    constructor(address _circleLeader, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token, uint256 _fundingThreshold) {
-        initialize(_circleLeader, _beansToDispursePerAttendee, _kycController, _erc20Token, _fundingThreshold);
+    constructor(Initialization.GivingCircleInitialization memory init) {
+        initialize(init);
     }
 
-    function initialize(address _circleLeader, uint256 _beansToDispursePerAttendee, address _kycController, address _erc20Token, uint256 _fundingThreshold) public initializer {
-        
-        _grantRole(LEADER_ROLE, _circleLeader);
-        erc20Token = partialIERC20(_erc20Token);
-        kycController = KYCController(_kycController);
+    function initialize(Initialization.GivingCircleInitialization memory init) public initializer {
 
+        phase = Phase.PROPOSAL_CREATION;
+        beansToDispursePerAttendee = init.beansToDispursePerAttendee;
+        fundingThreshold = init.fundingThreshold;
         attendeeCount = 0;
         erc20TokenPerBean = 0;
-        phase = Phase.PROPOSAL_CREATION;
         proposalCount = 0;
-        beansToDispursePerAttendee = _beansToDispursePerAttendee;
 
-        fundingThreshold = _fundingThreshold;
+        for (uint256 i = 0; i < init.circleLeaders.length; i++) {
+            _grantRole(LEADER_ROLE, init.circleLeaders[i]);
+        }  
+
+        for (uint256 i = 0; i < init.specialBeanPlacers.length; i++) {
+            _grantRole(SPECIAL_BEAN_PLACER_ROLE, init.specialBeanPlacers[i]);
+        }
+
+        for (uint256 i = 0; i < init.specialGiftRedeemers.length; i++) {
+            _grantRole(SPECIAL_GIFT_REDEEMER_ROLE, init.specialGiftRedeemers[i]);
+        }
+
+        erc20Token = partialIERC20(init.erc20Token);
+        kycController = KYCController(init.kycController);
+
     }
 
     //Start Phase 1 Core Functions
@@ -80,7 +88,7 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         _grantRole(PROPOSER_ROLE, giftRecipient);
 
         uint256 proposalIndex = proposalCount;
-        Proposal storage newProposal = proposals[proposalIndex];
+        Proposals.Proposal storage newProposal = proposals[proposalIndex];
         newProposal.beansReceived = 0;
         newProposal.giftAddress = giftRecipient;
 
@@ -114,13 +122,14 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
         if (!isPresent) {
             numOfBeans += beansToDispursePerAttendee;
-            attendeeBeanCount[addr] = beansToDispursePerAttendee;
+
             attendees[attendeeCount] = addr;
+            beansAvailable[attendeeCount] = beansToDispursePerAttendee;
             attendeeCount++;
         }
     }
 
-    function ProgressToBeanPlacementPhase() public onlyRole(LEADER_ROLE) {
+    function ProgressToBeanPlacementPhase() external onlyRole(LEADER_ROLE) {
         require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
         phase = Phase.BEAN_PLACEMENT;
     }
@@ -128,20 +137,37 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     //End Phase 1 Core Functions
 
     //Start Phase 2 Core Functions
-    function placeBeans(uint256 proposalIndex, uint256 beanQuantity) external {
+    function placeBeans(address attendee, uint256 proposalIndex, uint256 beanQuantity) internal {
         require (
             phase == Phase.BEAN_PLACEMENT, "circle needs to be in bean placement phase."
         );
 
-        require(attendeeBeanCount[msg.sender] >= beanQuantity, "not enough beans held to place bean quantity.");
+        bool isPresent = false;
+        for (uint256 i = 0; i < attendeeCount; i++) {
+            if (attendees[i] == attendee) {
+                require(beansAvailable[i] >= beanQuantity, "not enough beans held to place bean quantity.");
 
-        attendeeBeanCount[msg.sender] -= beanQuantity;
-        proposals[proposalIndex].beansReceived += beanQuantity;
-        emit BeansPlaced(proposalIndex, beanQuantity, msg.sender);
+                beansAvailable[i] -= beanQuantity;
+                proposals[proposalIndex].beansReceived += beanQuantity;
+                
+                isPresent = true;
+                emit BeansPlaced(proposalIndex, beanQuantity, attendee); 
+                break;               
+            }
+        }
+
+        require(isPresent, "attendee not found!");
     }
 
-    //adding funds has been removed from the 
-    function ProgressToGiftRedeemPhase() public onlyRole(LEADER_ROLE) {
+    function placeMyBeans(uint256 proposalIndex, uint256 beanQuantity) external {
+        placeBeans(msg.sender, proposalIndex, beanQuantity);
+    }
+
+    function placeBeansForSomeone(address attendee, uint256 proposalIndex, uint256 beanQuantity) external onlyRole(SPECIAL_BEAN_PLACER_ROLE) {
+        placeBeans(attendee, proposalIndex, beanQuantity);
+    }
+ 
+    function ProgressToGiftRedeemPhase() external onlyRole(LEADER_ROLE) {
         require(phase == Phase.BEAN_PLACEMENT, "circle needs to be in bean placement phase");
         require(erc20Token.balanceOf(address(this)) >= fundingThreshold, "Circle needs to be funded first!");
 
@@ -178,15 +204,15 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
     //Start Phase 3 Core Functions    
 
-    function redeemMyGift() external onlyRole(PROPOSER_ROLE) {
+    function redeemGift(address addr) internal {
         require(
             phase == Phase.GIFT_REDEEM, "circle needs to be in gift redeem phase"
         );
 
-        require(kycController.isUserKyced(msg.sender), "You need to be KYCed first!");
+        require(kycController.isUserKyced(addr), "You need to be KYCed first!");
 
         for (uint256 i = 0; i < proposalCount; i++) {
-            if (proposals[i].giftAddress == msg.sender) {
+            if (proposals[i].giftAddress == addr) {
                 
                 require(!proposals[i].hasRedeemed, "You already redeemed your gift!");
 
@@ -199,6 +225,14 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         }
     }
 
+    function redeemGiftForSomeone(address addr) external onlyRole(SPECIAL_GIFT_REDEEMER_ROLE) {
+        redeemGift(addr);
+    }
+    
+    function redeemMyGift() external onlyRole(PROPOSER_ROLE) {
+        redeemGift(msg.sender);
+    }
+
     function rollOverToCircle(address otherCircle) public onlyRole(LEADER_ROLE) {
         require(phase == Phase.GIFT_REDEEM, "circle needs to be in gift redeem phase");
         erc20Token.transfer(otherCircle, getLeftoverFunds());
@@ -206,26 +240,38 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
     //End Phase 3 Core Functions
 
+    //Helper Functions
     function getAttendees() public view returns(address[] memory) {
 
         address[] memory arr = new address[](attendeeCount);
 
-        for (uint256 i = 0; i < attendeeCount; i++) {
+        for (uint256 i = 0; i < arr.length; i++) {
             arr[i] = attendees[i];
         }
 
         return arr;
     }
 
-    function getProposals() public view returns(Proposal[] memory) {
+    function getProposals() public view returns(Proposals.Proposal[] memory) {
 
-        Proposal[] memory arr = new Proposal[](proposalCount);
+        Proposals.Proposal[] memory arr = new Proposals.Proposal[](proposalCount);
 
-        for (uint256 i = 0; i < proposalCount; i++) {
+        for (uint256 i = 0; i < arr.length; i++) {
             arr[i] = proposals[i];
         }
 
         return arr;
+    }
+
+    function getAvailableBeans(address addr) external view returns(uint256) {
+
+        for (uint256 i = 0; i < attendeeCount; i++) {
+            if (attendees[i] == addr) {
+                return beansAvailable[i];
+            }
+        }
+
+        return 0;
     }
 
     function getLeftoverFunds() public view returns(uint256) {
