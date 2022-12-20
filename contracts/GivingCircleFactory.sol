@@ -96,8 +96,22 @@ contract GivingCircleFactory is AccessControl {
         return instances[index].getAvailableBeans(addr);
     }
 
+    function getTotalBeansDispursed(uint256 index) external view returns(uint256) {
+        return instances[index].getTotalBeansDispursed();
+    }
+
     function getLeftoverFunds(uint256 index) external view returns(uint256) {
         return instances[index].getLeftoverFunds();
+    }
+
+    function getTotalRedeemedFunds(uint256 index) external view returns(uint256) {
+        return instances[index].getTotalRedeemedFunds();
+    }
+    function getTotalUnredeemedFunds(uint256 index) external view returns(uint256) {
+        return instances[index].getTotalUnredeemedFunds();
+    }
+    function getTotalAllocatedFunds(uint256 index) external view returns (uint256) {
+        return instances[index].getTotalAllocatedFunds();
     }
 
     //End Circle Interaction Functions

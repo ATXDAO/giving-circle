@@ -30,7 +30,6 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     uint public erc20TokenPerBean;
 
     uint256 public beansToDispursePerAttendee;
-    uint256 public numOfBeans;
     
     uint256 public attendeeCount;
     mapping(uint256 => Attendees.Attendee) attendees;
@@ -119,8 +118,6 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         }
 
         if (!isPresent) {
-            numOfBeans += beansToDispursePerAttendee;
-
             attendees[attendeeCount].addr = addr;
             attendees[attendeeCount].beansAvailable = beansToDispursePerAttendee;
             attendeeCount++;
@@ -180,7 +177,9 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
     function _calcErc20TokenPerBean () internal virtual returns (uint) {
         uint256 availableUSDC = erc20Token.balanceOf(address(this));
-        uint256 newerc20TokenPerBean = (availableUSDC) / numOfBeans;
+
+
+        uint256 newerc20TokenPerBean = (availableUSDC) / getTotalBeansDispursed();
         
         erc20TokenPerBean = newerc20TokenPerBean;
         return newerc20TokenPerBean;
@@ -270,6 +269,10 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         }
 
         return 0;
+    }
+
+    function getTotalBeansDispursed() public view returns(uint256) {
+        return attendeeCount * beansToDispursePerAttendee;
     }
 
     function getLeftoverFunds() public view returns(uint256) {
