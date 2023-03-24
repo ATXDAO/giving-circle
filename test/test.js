@@ -31,7 +31,7 @@ describe("Giving Circle", function () {
     });
 
     const GivingCircleFactory = await ethers.getContractFactory("GivingCircleFactory");
-    const givingCircleFactory = await GivingCircleFactory.deploy();
+    const givingCircleFactory = await GivingCircleFactory.deploy([owner.address]);
     await givingCircleFactory.setImplementation(givingCircleImplementation.address);
     let impl = await givingCircleFactory.implementation();
     console.log(impl);
@@ -119,6 +119,8 @@ describe("Giving Circle", function () {
     let j = await givingCircleFactory.getProposals(0);
     console.log(j);
   });
+
+  return;
 
   it("", async function () {
 

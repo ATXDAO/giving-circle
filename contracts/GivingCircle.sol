@@ -16,13 +16,6 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     bytes32 public constant SPECIAL_BEAN_PLACER_ROLE = keccak256("SPECIAL_BEAN_PLACER_ROLE");
     bytes32 public constant SPECIAL_GIFT_REDEEMER_ROLE = keccak256("SPECIAL_GIFT_REDEEMER_ROLE");
     
-    enum Phase
-    {
-        UNINITIALIZED, //Contract is not initialized. Cannot begin circle until no longer uninitalized.
-        PROPOSAL_CREATION, //Register attendees, fund gifts, create new proposals, and progress phase to bean placement.
-        BEAN_PLACEMENT, //Register attendees, fund gifts, place beans, and progress phase to gift redeem.
-        GIFT_REDEEM //Redeem gifts. Rollover leftover funds to a different circle.
-    }
     Phase public phase;
 
     uint256 public beansToDispursePerAttendee;
@@ -76,6 +69,12 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     }
 
     //Start Phase 1 Core Functions
+
+    function batchCreateNewProposals(address payable[] memory proposers) public onlyRole(LEADER_ROLE) {
+        for (uint256 i = 0; i < proposers.length; i++) {
+            createNewProposal(proposers[i]);
+        }
+    }
 
     function createNewProposal(address payable proposer) public onlyRole(LEADER_ROLE) {
         require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
@@ -131,6 +130,9 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     //End Phase 1 Core Functions
 
     //Start Phase 2 Core Functions
+
+
+
     function placeBeans(address attendee, uint256 proposalIndex, uint256 beanQuantity) internal {
         require (
             phase == Phase.BEAN_PLACEMENT, "circle needs to be in bean placement phase."
@@ -153,12 +155,26 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         require(isPresent, "attendee not found!");
     }
 
+    function placeBeansMultiple(address attendee, uint256[] memory indices, uint256[] memory beanQuantities) internal {
+        for (uint256 i = 0; i < indices.length; i++) {
+            placeBeans(attendee, indices[i], beanQuantities[i]);
+        }
+    }
+
     function placeMyBeans(uint256 proposalIndex, uint256 beanQuantity) external {
         placeBeans(msg.sender, proposalIndex, beanQuantity);
     }
 
+    function placeMyBeansMultiple(uint256[] memory proposalIndices, uint256[] memory beanQuantities) external {
+        placeBeansMultiple(msg.sender, proposalIndices, beanQuantities);
+    }
+
     function placeBeansForSomeone(address attendee, uint256 proposalIndex, uint256 beanQuantity) external onlyRole(SPECIAL_BEAN_PLACER_ROLE) {
         placeBeans(attendee, proposalIndex, beanQuantity);
+    }
+
+    function placeBeansForSomeoneMultiple(address attendee, uint256[] memory proposalIndices, uint256[] memory beanQuantities) external onlyRole(SPECIAL_BEAN_PLACER_ROLE) {
+        placeBeansMultiple(attendee, proposalIndices, beanQuantities);
     }
  
     function ProgressToGiftRedeemPhase() external onlyRole(LEADER_ROLE) {
@@ -170,13 +186,14 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
         phase = Phase.GIFT_REDEEM;
         emit VotingClosed();
+
+        //maybe send gifts directly from here?
     }
 
     //Start Phase 2 Internal Functions
 
     function _calcErc20TokenPerBean () internal virtual returns (uint) {
         uint256 availableUSDC = erc20Token.balanceOf(address(this));
-
 
         uint256 newerc20TokenPerBean = (availableUSDC) / getTotalBeansDispursed();
         
@@ -199,13 +216,14 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     //End Phase 2 Internal Functions
 
     //Start Phase 3 Core Functions    
-
     function redeemGift(address addr) internal {
         require(
             phase == Phase.GIFT_REDEEM, "circle needs to be in gift redeem phase"
         );
 
-        require(kycController.isUserKyced(addr), "You need to be KYCed first!");
+        if (address(kycController) != address(0)) {
+            require(kycController.isUserKyced(addr), "You need to be KYCed first!");
+        }
 
         for (uint256 i = 0; i < proposalCount; i++) {
             if (proposals[i].proposer == addr) {
@@ -223,6 +241,12 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
     function redeemGiftForSomeone(address addr) external onlyRole(SPECIAL_GIFT_REDEEMER_ROLE) {
         redeemGift(addr);
+    }
+    
+    function redeemGiftForSomeoneMultiple(address[] memory addrs) external onlyRole(SPECIAL_GIFT_REDEEMER_ROLE) {
+        for (uint256 i = 0; i < addrs.length; i++) {
+            redeemGift(addrs[i]);
+        }
     }
     
     function redeemMyGift() external onlyRole(PROPOSER_ROLE) {

@@ -10,6 +10,14 @@ interface IGivingCircle is IAccessControl {
 
     function LEADER_ROLE() external view returns(bytes32);
 
+    enum Phase
+    {
+        UNINITIALIZED, //Contract is not initialized. Cannot begin circle until no longer uninitalized.
+        PROPOSAL_CREATION, //Register attendees, fund gifts, create new proposals, and progress phase to bean placement.
+        BEAN_PLACEMENT, //Register attendees, fund gifts, place beans, and progress phase to gift redeem.
+        GIFT_REDEEM //Redeem gifts. Rollover leftover funds to a different circle.
+    }
+    
     function initialize(Initialization.GivingCircleInitialization memory init) external;
 
     function registerAttendee(address addr) external;

@@ -1,9 +1,27 @@
 require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
+require('hardhat-contract-sizer');
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  solidity: "0.8.17",
+  solidity: {
+    compilers: [
+      {
+        version: "0.8.17",
+        // settings: {
+        //   optimizer: {
+        //     enabled: true,
+        //     runs: 200
+        //   }
+        // }
+      }
+    ]
+  },
+  contractSizer: {
+    alphaSort: false,
+    runOnCompile: true,
+    disambiguatePaths: false,
+  },
   networks: {
     eth: {
       url: process.env.URL_ETHEREUM,

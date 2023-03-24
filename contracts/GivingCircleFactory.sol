@@ -18,10 +18,16 @@ contract GivingCircleFactory is AccessControl {
 
     event CreatedNewCircle(address);
 
+    constructor(address[] memory admins) {
+
+        for (uint256 i = 0; i < admins.length; i++) {
+            _grantRole(DEFAULT_ADMIN_ROLE, admins[i]);
+        }
+    }
+
     function createGivingCircle(Initialization.GivingCircleInitialization memory init) public {
         address clone = Clones.clone(address(implementation));
         IGivingCircle newGivingCircle = IGivingCircle(clone);
-
         init.circleLeaders = addSelfToArray(init.circleLeaders);
         init.specialBeanPlacers = addSelfToArray(init.specialBeanPlacers);
         init.specialGiftRedeemers = addSelfToArray(init.specialGiftRedeemers);
@@ -32,7 +38,7 @@ contract GivingCircleFactory is AccessControl {
         emit CreatedNewCircle(clone);
     }
 
-    function setImplementation(address _implementation) external {
+    function setImplementation(address _implementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setImplementation(_implementation);
     }
 
@@ -115,14 +121,6 @@ contract GivingCircleFactory is AccessControl {
     }
 
     //End Circle Interaction Functions
-
-    // import "./KYCController.sol";
-
-    // KYCController kycToReference;
-
-    // function setKycImplementation(address addr) public onlyRole(CIRCLE_ADMIN_ROLE) {
-    //     kycToReference = KYCController(addr);
-    // }
 
     // FACTORY HELPER FUNCTIONS
     function addSelfToArray(address[] memory _arr) internal view returns(address[] memory) {
