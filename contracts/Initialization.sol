@@ -6,8 +6,8 @@ library Initialization {
         uint256 beansToDispursePerAttendee;
         uint256 fundingThreshold;
         address[] circleLeaders;
-        address[] specialBeanPlacers;
-        address[] specialGiftRedeemers;
+        address[] beanPlacementAdmins;
+        address[] fundsManagers;
         address erc20Token;
         address kycController;
     }

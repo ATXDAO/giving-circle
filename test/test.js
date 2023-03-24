@@ -24,8 +24,8 @@ describe("Giving Circle", function () {
       beansToDispursePerAttendee: 10,
       fundingThreshold: 1000,
       circleLeaders: [owner.address],
-      specialBeanPlacers: [],
-      specialGiftRedeemers: [],
+      beanPlacementAdmins: [],
+      fundsManagers: [],
       erc20Token: erc20TokenContract.address,
       kycController: kycController.address
     });
@@ -40,8 +40,8 @@ describe("Giving Circle", function () {
       beansToDispursePerAttendee: 10,
       fundingThreshold: 1000,
       circleLeaders: [owner.address],
-      specialBeanPlacers: [],
-      specialGiftRedeemers: [],
+      beanPlacementAdmins: [],
+      fundsManagers: [],
       erc20Token: erc20TokenContract.address,
       kycController: kycController.address
     });

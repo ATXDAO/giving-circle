@@ -9,7 +9,9 @@ import "./Attendees.sol";
 interface IGivingCircle is IAccessControl {
 
     function LEADER_ROLE() external view returns(bytes32);
-
+    function FUNDS_MANAGER_ROLE() external view returns(bytes32);
+    function BEAN_PLACEMENT_ADMIN_ROLE() external view returns(bytes32);
+    
     enum Phase
     {
         UNINITIALIZED, //Contract is not initialized. Cannot begin circle until no longer uninitalized.

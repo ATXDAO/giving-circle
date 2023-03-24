@@ -13,8 +13,8 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
     bytes32 public constant LEADER_ROLE = keccak256("LEADER_ROLE");
     bytes32 public constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
-    bytes32 public constant SPECIAL_BEAN_PLACER_ROLE = keccak256("SPECIAL_BEAN_PLACER_ROLE");
-    bytes32 public constant SPECIAL_GIFT_REDEEMER_ROLE = keccak256("SPECIAL_GIFT_REDEEMER_ROLE");
+    bytes32 public constant BEAN_PLACEMENT_ADMIN_ROLE = keccak256("BEAN_PLACEMENT_ADMIN_ROLE");
+    bytes32 public constant FUNDS_MANAGER_ROLE = keccak256("FUNDS_MANAGER_ROLE");
     
     Phase public phase;
 
@@ -55,12 +55,12 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
             _grantRole(LEADER_ROLE, init.circleLeaders[i]);
         }  
 
-        for (uint256 i = 0; i < init.specialBeanPlacers.length; i++) {
-            _grantRole(SPECIAL_BEAN_PLACER_ROLE, init.specialBeanPlacers[i]);
+        for (uint256 i = 0; i < init.beanPlacementAdmins.length; i++) {
+            _grantRole(BEAN_PLACEMENT_ADMIN_ROLE, init.beanPlacementAdmins[i]);
         }
 
-        for (uint256 i = 0; i < init.specialGiftRedeemers.length; i++) {
-            _grantRole(SPECIAL_GIFT_REDEEMER_ROLE, init.specialGiftRedeemers[i]);
+        for (uint256 i = 0; i < init.fundsManagers.length; i++) {
+            _grantRole(FUNDS_MANAGER_ROLE, init.fundsManagers[i]);
         }
 
         erc20Token = partialIERC20(init.erc20Token);
@@ -124,6 +124,9 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
     function ProgressToBeanPlacementPhase() external onlyRole(LEADER_ROLE) {
         require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
+        require(attendeeCount > 0, "Need to have at least 1 attendee before progressing further!");
+        require(proposalCount > 0, "Need to have at least 1 proposal before progressing further!");
+
         phase = Phase.BEAN_PLACEMENT;
     }
 
@@ -169,11 +172,11 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         placeBeansMultiple(msg.sender, proposalIndices, beanQuantities);
     }
 
-    function placeBeansForSomeone(address attendee, uint256 proposalIndex, uint256 beanQuantity) external onlyRole(SPECIAL_BEAN_PLACER_ROLE) {
+    function placeBeansForSomeone(address attendee, uint256 proposalIndex, uint256 beanQuantity) external onlyRole(BEAN_PLACEMENT_ADMIN_ROLE) {
         placeBeans(attendee, proposalIndex, beanQuantity);
     }
 
-    function placeBeansForSomeoneMultiple(address attendee, uint256[] memory proposalIndices, uint256[] memory beanQuantities) external onlyRole(SPECIAL_BEAN_PLACER_ROLE) {
+    function placeBeansForSomeoneMultiple(address attendee, uint256[] memory proposalIndices, uint256[] memory beanQuantities) external onlyRole(BEAN_PLACEMENT_ADMIN_ROLE) {
         placeBeansMultiple(attendee, proposalIndices, beanQuantities);
     }
  
@@ -239,11 +242,11 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         }
     }
 
-    function redeemGiftForSomeone(address addr) external onlyRole(SPECIAL_GIFT_REDEEMER_ROLE) {
+    function redeemGiftForSomeone(address addr) external onlyRole(FUNDS_MANAGER_ROLE) {
         redeemGift(addr);
     }
     
-    function redeemGiftForSomeoneMultiple(address[] memory addrs) external onlyRole(SPECIAL_GIFT_REDEEMER_ROLE) {
+    function redeemGiftForSomeoneMultiple(address[] memory addrs) external onlyRole(FUNDS_MANAGER_ROLE) {
         for (uint256 i = 0; i < addrs.length; i++) {
             redeemGift(addrs[i]);
         }
@@ -253,9 +256,9 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         redeemGift(msg.sender);
     }
 
-    function rollOverToCircle(address otherCircle) public onlyRole(LEADER_ROLE) {
+    function withdrawRemainingFunds(address addr) public onlyRole(FUNDS_MANAGER_ROLE) {
         require(phase == Phase.GIFT_REDEEM, "circle needs to be in gift redeem phase");
-        erc20Token.transfer(otherCircle, getLeftoverFunds());
+        erc20Token.transfer(addr, getLeftoverFunds());
     }
 
     //End Phase 3 Core Functions

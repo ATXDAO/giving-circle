@@ -29,8 +29,8 @@ contract GivingCircleFactory is AccessControl {
         address clone = Clones.clone(address(implementation));
         IGivingCircle newGivingCircle = IGivingCircle(clone);
         init.circleLeaders = addSelfToArray(init.circleLeaders);
-        init.specialBeanPlacers = addSelfToArray(init.specialBeanPlacers);
-        init.specialGiftRedeemers = addSelfToArray(init.specialGiftRedeemers);
+        init.beanPlacementAdmins = addSelfToArray(init.beanPlacementAdmins);
+        init.fundsManagers = addSelfToArray(init.fundsManagers);
         newGivingCircle.initialize(init);
 
         instances[instancesCount] = newGivingCircle;
