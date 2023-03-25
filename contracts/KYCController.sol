@@ -8,17 +8,17 @@ contract KYCController is AccessControl {
 
     mapping (address => bool) isKYCed; // must be set to true in order for redemptions
 
-    bytes32 public constant KYC_MANAGER_ROLE = keccak256("KYC_MANAGER_ROLE");
-
-    constructor(address kycManager) {
-        _grantRole(KYC_MANAGER_ROLE, kycManager);
+    constructor(address[] memory kycManagers) {
+        for (uint256 i = 0; i < kycManagers.length; i++) {
+            _grantRole(DEFAULT_ADMIN_ROLE, kycManagers[i]);
+        }
     }
 
     function isUserKyced(address addr) external view returns (bool) {
         return isKYCed[addr];
     }
 
-    function kycUser(address kycAddress) external onlyRole(KYC_MANAGER_ROLE) {
+    function kycUser(address kycAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
         isKYCed[kycAddress] = true;
     }
 }

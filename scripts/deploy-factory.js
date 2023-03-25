@@ -30,6 +30,9 @@ async function main() {
         "GivingCircleFactory", 
         [
             owner.address
+        ],
+        [
+            owner.address
         ]
     );
 }

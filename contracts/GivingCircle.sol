@@ -45,11 +45,16 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     function initialize(Initialization.GivingCircleInitialization memory init) public initializer {
 
         phase = Phase.PROPOSAL_CREATION;
+
+        require(init.beansToDispursePerAttendee > 0, "You need atleast 1 bean to be dispursed per person!");
+
         beansToDispursePerAttendee = init.beansToDispursePerAttendee;
         fundingThreshold = init.fundingThreshold;
         proposalCount = 0;
         attendeeCount = 0;
         erc20TokenPerBean = 0;
+
+        require(init.circleLeaders.length > 0, "You need atleast 1 leader for the circle!");
 
         for (uint256 i = 0; i < init.circleLeaders.length; i++) {
             _grantRole(LEADER_ROLE, init.circleLeaders[i]);
@@ -71,6 +76,8 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     //Start Phase 1 Core Functions
 
     function batchCreateNewProposals(address payable[] memory proposers) public onlyRole(LEADER_ROLE) {
+        require(proposers.length > 0, "Please provider one or more proposer!");
+
         for (uint256 i = 0; i < proposers.length; i++) {
             createNewProposal(proposers[i]);
         }
@@ -95,6 +102,8 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     //In current setup, allows for Megan or circle leader to mass add a list of arrays if they chose to gather them all beforehand
     //or at the event.
     function registerAttendees(address[] memory addrs) public onlyRole(LEADER_ROLE) {
+        require(addrs.length > 0, "Please provide one or more attendee!");
+
         for (uint256 i = 0; i < addrs.length; i++) {
             registerAttendee(addrs[i]);
         }
@@ -141,6 +150,9 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
             phase == Phase.BEAN_PLACEMENT, "circle needs to be in bean placement phase."
         );
 
+        require(proposalIndex < proposalCount, "Please enter a valid proposal index!");
+        require(beanQuantity > 0, "Please provide one or more beans to place!");
+         
         bool isPresent = false;
         for (uint256 i = 0; i < attendeeCount; i++) {
             if (attendees[i].addr == attendee) {

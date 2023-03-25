@@ -24,21 +24,14 @@ async function deploy(contractName, ...args) {
 
 async function main() {
 
-  const [owner] = await ethers.getSigners();
+    const [owner] = await ethers.getSigners();
 
-  let implementation = await deploy(
-    "GivingCircle", {
-    beansToDispursePerAttendee: 1,
-    fundingThreshold: 0,
-    circleLeaders: [owner.address],
-    beanPlacementAdmins: [],
-    fundsManagers: [],
-    erc20Token: "0x0000000000000000000000000000000000000000",
-    kycController: "0x0000000000000000000000000000000000000000"
-    }
-  );
-
-  return;
+    let factory = await deploy(
+        "KYCController",
+        [
+            owner.address
+        ]
+    );
 }
 
 // We recommend this pattern to be able to use async/await everywhere
