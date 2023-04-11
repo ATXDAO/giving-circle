@@ -79,11 +79,19 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
     //Start Phase 1 Core Functions
 
-    function batchCreateNewProposals(address payable[] memory proposers, string[] memory names, string[] memory contributions) public onlyRole(LEADER_ROLE) {
-        require(proposers.length > 0, "Please provider one or more proposer!");
+    // function batchCreateNewProposals(address payable[] memory proposers, string[] memory names, string[] memory contributions) public onlyRole(LEADER_ROLE) {
+    //     require(proposers.length > 0, "Please provider one or more proposer!");
 
-        for (uint256 i = 0; i < proposers.length; i++) {
-            createNewProposal(proposers[i], names[i], contributions[i]);
+    //     for (uint256 i = 0; i < proposers.length; i++) {
+    //         createNewProposal(proposers[i], names[i], contributions[i]);
+    //     }
+    // }
+
+    function batchCreateNewProposals(Proposals.Proposal[] memory newProposals) public onlyRole(LEADER_ROLE) {
+        require(newProposals.length > 0, "Please provider one or more proposer!");
+
+        for (uint256 i = 0; i < newProposals.length; i++) {
+            createNewProposal(newProposals[i]);
         }
     }
 
@@ -91,23 +99,42 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     //add description to proposal.
     //allow someone to add themself as a proposer, new function createMyNewProposal()?
     //rename createNewProposal to createNewProposalForSomeoneElse()?
-    function createNewProposal(address payable proposer, string memory name, string memory contributions) public onlyRole(LEADER_ROLE) {
-        require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
-        require(!hasRole(PROPOSER_ROLE, proposer), "Recipient already present in proposal!");
 
-        _grantRole(PROPOSER_ROLE, proposer);
+    function createNewProposal(Proposals.Proposal memory proposal) public onlyRole(LEADER_ROLE) {
+        require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
+        require(!hasRole(PROPOSER_ROLE, proposal.contributor), "Recipient already present in proposal!");
+
 
         uint256 proposalIndex = proposalCount;
         Proposals.Proposal storage newProposal = proposals[proposalIndex];
-        newProposal.proposer = proposer;
-        newProposal.name = name;
-        newProposal.contributions = contributions;
+        newProposal.contributor = proposal.contributor;
+        newProposal.contributorName = proposal.contributorName;
+        newProposal.contributions = proposal.contributions;
         newProposal.beansReceived = 0;
 
         proposalCount++;
 
-        emit ProposalCreated(proposalIndex, proposer);
+        _grantRole(PROPOSER_ROLE, proposal.contributor);
+        emit ProposalCreated(proposalIndex, newProposal.contributor);
     }
+
+    // function createNewProposal(address payable proposer, string memory _name, string memory contributions) public onlyRole(LEADER_ROLE) {
+    //     require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
+    //     require(!hasRole(PROPOSER_ROLE, proposer), "Recipient already present in proposal!");
+
+    //     _grantRole(PROPOSER_ROLE, proposer);
+
+    //     uint256 proposalIndex = proposalCount;
+    //     Proposals.Proposal storage newProposal = proposals[proposalIndex];
+    //     newProposal.proposer = proposer;
+    //     newProposal.name = _name;
+    //     newProposal.contributions = contributions;
+    //     newProposal.beansReceived = 0;
+
+    //     proposalCount++;
+
+    //     emit ProposalCreated(proposalIndex, proposer);
+    // }
 
     //In current setup, allows for Megan or circle leader to mass add a list of arrays if they chose to gather them all beforehand
     //or at the event.
@@ -251,14 +278,14 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         }
 
         for (uint256 i = 0; i < proposalCount; i++) {
-            if (proposals[i].proposer == addr) {
+            if (proposals[i].contributor == addr) {
                 
                 require(!proposals[i].hasRedeemed, "You already redeemed your gift!");
 
                 erc20Token.approve(address(this), proposals[i].giftAmount);
-                erc20Token.transferFrom(address(this), proposals[i].proposer, proposals[i].giftAmount); // USDCgiftPending mapping is 10**18, thus so is redemptionqty
+                erc20Token.transferFrom(address(this), proposals[i].contributor, proposals[i].giftAmount); // USDCgiftPending mapping is 10**18, thus so is redemptionqty
                 proposals[i].hasRedeemed = true;
-                emit GiftRedeemed(proposals[i].giftAmount, proposals[i].proposer);
+                emit GiftRedeemed(proposals[i].giftAmount, proposals[i].contributor);
                 break;
             }
         }

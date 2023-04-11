@@ -27,7 +27,10 @@ interface IGivingCircle is IAccessControl {
     function attendeeCount() external view returns(uint256);
     function getAttendees() external view returns(Attendees.Attendee[] memory);
 
-    function createNewProposal(address payable proposer, string memory name, string memory contributions) external;
+    function batchCreateNewProposals(Proposals.Proposal[] memory newProposals) external;
+    function createNewProposal(Proposals.Proposal memory proposal) external;
+    
+    // function createNewProposal(address payable proposer, string memory name, string memory contributions) external;
 
     function proposalCount() external view returns(uint256);
     function getProposals() external view returns(Proposals.Proposal[] memory);
