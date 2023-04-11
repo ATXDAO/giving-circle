@@ -3,6 +3,7 @@ pragma solidity ^0.8.4;
 
 library Initialization {
     struct GivingCircleInitialization {
+        string name;
         uint256 beansToDispursePerAttendee;
         uint256 fundingThreshold;
         address[] circleLeaders;

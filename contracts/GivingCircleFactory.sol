@@ -21,23 +21,20 @@ contract GivingCircleFactory is AccessControl {
 
     event CreatedNewCircle(address);
 
-    constructor(address[] memory admins, address[] memory circleCreators) {
+    constructor(address[] memory admins) {
 
         for (uint256 i = 0; i < admins.length; i++) {
             _grantRole(DEFAULT_ADMIN_ROLE, admins[i]);
-        }
-
-        for (uint256 i = 0; i < circleCreators.length; i++) {
-            _grantRole(CIRCLE_CREATOR_ROLE, circleCreators[i]);
         }
     }
 
     function createGivingCircle(Initialization.GivingCircleInitialization memory init) external onlyRole(CIRCLE_CREATOR_ROLE) {
         address clone = Clones.clone(address(implementation));
         IGivingCircle newGivingCircle = IGivingCircle(clone);
-        init.circleLeaders = init.circleLeaders;
-        init.beanPlacementAdmins = init.beanPlacementAdmins;
-        init.fundsManagers = init.fundsManagers;
+        // init.name = init.name;
+        // init.circleLeaders = init.circleLeaders;
+        // init.beanPlacementAdmins = init.beanPlacementAdmins;
+        // init.fundsManagers = init.fundsManagers;
         newGivingCircle.initialize(init);
 
         instances[instancesCount] = newGivingCircle;

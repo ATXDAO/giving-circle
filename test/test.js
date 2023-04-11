@@ -10,6 +10,7 @@ describe("Giving Circle", function () {
 
   it("", async function () {
 
+
     const [owner, attendee1, attendee2, badActor] = await ethers.getSigners();
 
     const Erc20TokenContract = await ethers.getContractFactory("TestERC20");
@@ -17,10 +18,12 @@ describe("Giving Circle", function () {
     await erc20TokenContract.mint(1500);
 
     const KYCController = await ethers.getContractFactory("KYCController");
-    const kycController = await KYCController.deploy(owner.address);
+    const kycController = await KYCController.deploy([owner.address]);
 
     const GivingCircleImplementation = await ethers.getContractFactory("GivingCircle");
+
     const givingCircleImplementation = await GivingCircleImplementation.deploy({
+      name: "impl",
       beansToDispursePerAttendee: 10,
       fundingThreshold: 1000,
       circleLeaders: [owner.address],
@@ -32,11 +35,18 @@ describe("Giving Circle", function () {
 
     const GivingCircleFactory = await ethers.getContractFactory("GivingCircleFactory");
     const givingCircleFactory = await GivingCircleFactory.deploy([owner.address]);
+
+    const CIRCLE_CREATOR_ROLE = await givingCircleFactory.CIRCLE_CREATOR_ROLE();
+    await givingCircleFactory.grantRole(CIRCLE_CREATOR_ROLE, owner.address);
+
+
+
     await givingCircleFactory.setImplementation(givingCircleImplementation.address);
     let impl = await givingCircleFactory.implementation();
     console.log(impl);
 
     await givingCircleFactory.createGivingCircle({
+      name: "example",
       beansToDispursePerAttendee: 10,
       fundingThreshold: 1000,
       circleLeaders: [owner.address],
@@ -46,59 +56,58 @@ describe("Giving Circle", function () {
       kycController: kycController.address
     });
     
+    
     let count = await givingCircleFactory.instancesCount();
     console.log(count);
 
     let addr = await givingCircleFactory.instances(0);
     console.log(addr);
 
-    let attendeeCount1 = await givingCircleFactory.attendeeCount(0);
+    let attendeeCount1 = await givingCircleImplementation.attendeeCount();
     console.log(attendeeCount1);
 
-    await givingCircleFactory.registerAttendee(0, attendee1.address);
+    await givingCircleImplementation.registerAttendee(attendee1.address);
     
-    let attendeeCount2 = await givingCircleFactory.attendeeCount(0);
+    let attendeeCount2 = await givingCircleImplementation.attendeeCount();
     console.log(attendeeCount2);
     
-    let attendees = await givingCircleFactory.getAttendees(0);
+    let attendees = await givingCircleImplementation.getAttendees();
     console.log(attendees);
 
-    await givingCircleFactory.createNewProposal(0, attendee1.address);
-    await givingCircleFactory.createNewProposal(0, attendee2.address);
+    await givingCircleImplementation.createNewProposal(attendee1.address, "Jeff", "I made a thing!");
+    await givingCircleImplementation.createNewProposal(attendee2.address, "Tony", "I made a different thing!");
 
-    let proposalsCount = await givingCircleFactory.proposalCount(0);
+    let proposalsCount = await givingCircleImplementation.proposalCount();
     console.log(proposalsCount);
 
-    await givingCircleFactory.ProgressToBeanPlacementPhase(0);
+    await givingCircleImplementation.ProgressToBeanPlacementPhase();
 
-    
-    let bc = await givingCircleFactory.getAvailableBeans(0, attendee1.address);
+    let bc = await givingCircleImplementation.getAvailableBeans(attendee1.address);
     console.log(bc);
 
-    await givingCircleFactory.connect(attendee1).placeMyBeans(0, 0, 7);
+    await givingCircleImplementation.connect(attendee1).placeMyBeans(0, 7);
 
-    let bc2 = await givingCircleFactory.getAvailableBeans(0, attendee1.address);
+    let bc2 = await givingCircleImplementation.getAvailableBeans(attendee1.address);
     console.log(bc2);
 
-    await givingCircleFactory.connect(attendee1).placeMyBeans(0, 1, 2);
+    await givingCircleImplementation.connect(attendee1).placeMyBeans(1, 2);
 
-    let bc3 = await givingCircleFactory.getAvailableBeans(0, attendee1.address);
+    let bc3 = await givingCircleImplementation.getAvailableBeans(attendee1.address);
     console.log(bc3);
 
-    await erc20TokenContract.transfer(givingCircleFactory.instances(0), 1000);
+    await erc20TokenContract.transfer(givingCircleImplementation.address, 1000);
 
-    await givingCircleFactory.ProgressToGiftRedeemPhase(0);
+    await givingCircleImplementation.ProgressToGiftRedeemPhase();
 
-    await erc20TokenContract.transfer(givingCircleFactory.instances(0), 300);
+    await erc20TokenContract.transfer(givingCircleImplementation.address, 300);
 
     await kycController.kycUser(attendee1.address);
     await kycController.kycUser(attendee2.address);
 
-
     let bo1= await erc20TokenContract.balanceOf(attendee1.address);
     console.log(bo1);
 
-    await givingCircleFactory.connect(attendee1).redeemMyGift(0);
+    await givingCircleImplementation.connect(attendee1).redeemMyGift();
 
     let bo = await erc20TokenContract.balanceOf(attendee1.address);
     console.log(bo);
@@ -106,17 +115,17 @@ describe("Giving Circle", function () {
     let bo3 = await erc20TokenContract.balanceOf(attendee2.address);
     console.log(bo3);
 
-    await givingCircleFactory.connect(attendee2).redeemMyGift(0);
+    await givingCircleImplementation.connect(attendee2).redeemMyGift();
 
     let bo4 = await erc20TokenContract.balanceOf(attendee2.address);
     console.log(bo4);
 
-    await erc20TokenContract.transfer(givingCircleFactory.instances(0), 200);
+    await erc20TokenContract.transfer(givingCircleImplementation.address, 200);
 
-    let i = await givingCircleFactory.getLeftoverFunds(0);
+    let i = await givingCircleImplementation.getLeftoverFunds();
     console.log(i);
 
-    let j = await givingCircleFactory.getProposals(0);
+    let j = await givingCircleImplementation.getProposals();
     console.log(j);
   });
 

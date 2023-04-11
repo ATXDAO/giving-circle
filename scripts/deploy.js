@@ -9,7 +9,7 @@ const { ethers } = require('hardhat')
 async function deploy(contractName, ...args) {
   const Contract = await ethers.getContractFactory(contractName);
   const contract = await Contract.deploy(...args);
-  
+
   console.log(`${contractName} is being deployed...`);
   console.log(`Transaction hash: ${contract.deployTransaction.hash}`);
 
@@ -29,18 +29,17 @@ async function main() {
 
   let implementation = await deploy(
     "GivingCircle", {
-    beansToDispursePerAttendee: 0,
+    name: "",
+    beansToDispursePerAttendee: 1,
     fundingThreshold: 0,
-    circleLeaders: [],
-    specialBeanPlacers: [],
-    specialGiftRedeemers: [],
+    circleLeaders: ["0x0000000000000000000000000000000000000000"],
+    beanPlacementAdmins: [],
+    fundsManagers: [],
     erc20Token: "0x0000000000000000000000000000000000000000",
     kycController: "0x0000000000000000000000000000000000000000"
     }
   );
 
-  return;
-  
   let factory = await deploy(
     "GivingCircleFactory", 
       [
@@ -49,7 +48,7 @@ async function main() {
   );
 
   let tx = await factory.setImplementation(implementation.address);
-      await tx.wait();
+  await tx.wait();
 
   let impl = await factory.implementation();
   console.log("impl is: " + impl);

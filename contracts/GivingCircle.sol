@@ -11,6 +11,8 @@ import "./Proposals.sol";
 
 contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
+    string public name;
+    
     bytes32 public constant LEADER_ROLE = keccak256("LEADER_ROLE");
     bytes32 public constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
     bytes32 public constant BEAN_PLACEMENT_ADMIN_ROLE = keccak256("BEAN_PLACEMENT_ADMIN_ROLE");
@@ -48,12 +50,14 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
         require(init.beansToDispursePerAttendee > 0, "You need atleast 1 bean to be dispursed per person!");
 
+        name = init.name;
+
         beansToDispursePerAttendee = init.beansToDispursePerAttendee;
         fundingThreshold = init.fundingThreshold;
         proposalCount = 0;
         attendeeCount = 0;
         erc20TokenPerBean = 0;
-
+    
         require(init.circleLeaders.length > 0, "You need atleast 1 leader for the circle!");
 
         for (uint256 i = 0; i < init.circleLeaders.length; i++) {
@@ -75,15 +79,19 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
     //Start Phase 1 Core Functions
 
-    function batchCreateNewProposals(address payable[] memory proposers) public onlyRole(LEADER_ROLE) {
+    function batchCreateNewProposals(address payable[] memory proposers, string[] memory names, string[] memory contributions) public onlyRole(LEADER_ROLE) {
         require(proposers.length > 0, "Please provider one or more proposer!");
 
         for (uint256 i = 0; i < proposers.length; i++) {
-            createNewProposal(proposers[i]);
+            createNewProposal(proposers[i], names[i], contributions[i]);
         }
     }
 
-    function createNewProposal(address payable proposer) public onlyRole(LEADER_ROLE) {
+    //add name to proposal.
+    //add description to proposal.
+    //allow someone to add themself as a proposer, new function createMyNewProposal()?
+    //rename createNewProposal to createNewProposalForSomeoneElse()?
+    function createNewProposal(address payable proposer, string memory name, string memory contributions) public onlyRole(LEADER_ROLE) {
         require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
         require(!hasRole(PROPOSER_ROLE, proposer), "Recipient already present in proposal!");
 
@@ -91,8 +99,10 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
 
         uint256 proposalIndex = proposalCount;
         Proposals.Proposal storage newProposal = proposals[proposalIndex];
-        newProposal.beansReceived = 0;
         newProposal.proposer = proposer;
+        newProposal.name = name;
+        newProposal.contributions = contributions;
+        newProposal.beansReceived = 0;
 
         proposalCount++;
 
