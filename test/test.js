@@ -74,8 +74,21 @@ describe("Giving Circle", function () {
     let attendees = await givingCircleImplementation.getAttendees();
     console.log(attendees);
 
-    await givingCircleImplementation.createNewProposal(attendee1.address, "Jeff", "I made a thing!");
-    await givingCircleImplementation.createNewProposal(attendee2.address, "Tony", "I made a different thing!");
+    await givingCircleImplementation.createNewProposal(
+      { 
+          addr: attendee1.address, name: "Jeff", contributions: "I made a thing!" , fundsAllocated: 0, hasRedeemed: false
+      }
+      
+      );
+
+      
+    await givingCircleImplementation.createNewProposal(
+{
+  addr: attendee2.address, name: "Tony", contributions: "I made another thing!" , fundsAllocated: 0, hasRedeemed: false
+
+}      );
+
+
 
     let proposalsCount = await givingCircleImplementation.proposalCount();
     console.log(proposalsCount);
@@ -97,7 +110,7 @@ describe("Giving Circle", function () {
 
     await erc20TokenContract.transfer(givingCircleImplementation.address, 1000);
 
-    await givingCircleImplementation.ProgressToGiftRedeemPhase();
+    await givingCircleImplementation.ProgressToFundsRedemptionPhase();
 
     await erc20TokenContract.transfer(givingCircleImplementation.address, 300);
 
@@ -107,7 +120,7 @@ describe("Giving Circle", function () {
     let bo1= await erc20TokenContract.balanceOf(attendee1.address);
     console.log(bo1);
 
-    await givingCircleImplementation.connect(attendee1).redeemMyGift();
+    await givingCircleImplementation.connect(attendee1).redeemMyFunds();
 
     let bo = await erc20TokenContract.balanceOf(attendee1.address);
     console.log(bo);
@@ -115,7 +128,7 @@ describe("Giving Circle", function () {
     let bo3 = await erc20TokenContract.balanceOf(attendee2.address);
     console.log(bo3);
 
-    await givingCircleImplementation.connect(attendee2).redeemMyGift();
+    await givingCircleImplementation.connect(attendee2).redeemMyFunds();
 
     let bo4 = await erc20TokenContract.balanceOf(attendee2.address);
     console.log(bo4);

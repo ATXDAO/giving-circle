@@ -6,6 +6,7 @@ library Initialization {
         string name;
         uint256 beansToDispursePerAttendee;
         uint256 fundingThreshold;
+        address[] admins;
         address[] circleLeaders;
         address[] beanPlacementAdmins;
         address[] fundsManagers;

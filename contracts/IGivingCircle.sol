@@ -27,11 +27,10 @@ interface IGivingCircle is IAccessControl {
     function attendeeCount() external view returns(uint256);
     function getAttendees() external view returns(Attendees.Attendee[] memory);
 
-    function batchCreateNewProposals(Proposals.Proposal[] memory newProposals) external;
-    function createNewProposal(Proposals.Proposal memory proposal) external;
+    function batchCreateNewProposals(Proposals.Contributor[] memory newContributors) external;
+    function createNewProposal(Proposals.Contributor memory newContributor) external;
+    function createNewProposalForMe(Proposals.Contributor memory newContributor) external;
     
-    // function createNewProposal(address payable proposer, string memory name, string memory contributions) external;
-
     function proposalCount() external view returns(uint256);
     function getProposals() external view returns(Proposals.Proposal[] memory);
 
@@ -40,11 +39,11 @@ interface IGivingCircle is IAccessControl {
     function getAvailableBeans(address addr) external view returns(uint256);
     function getTotalBeansDispursed() external view returns(uint256);
 
-    function ProgressToGiftRedeemPhase() external;
     function ProgressToBeanPlacementPhase() external;
+    function ProgressToFundsRedemptionPhase() external;
 
-    function redeemGiftForSomeone(address addr) external;
-    function redeemMyGift() external;
+    function redeemFundsForSomeone(address addr) external;
+    function redeemMyFunds() external;
 
     function getLeftoverFunds() external view returns(uint256);
     function getTotalRedeemedFunds() external view returns(uint256);

@@ -35,10 +35,10 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     uint public erc20TokenPerBean;
 
     event ProposalCreated(uint indexed propNumb, address indexed proposer);
-    event BeansPlaced(uint indexed propNumb, uint indexed beansplaced, address indexed beanplacer); // emitted in placeBeans
-    event GiftsAllocated();
+    event BeansPlaced(uint indexed propNumb, uint indexed beansplaced, address indexed beanPlacer);
+    event FundsAllocated();
     event VotingClosed();
-    event GiftRedeemed(uint indexed giftwithdrawn, address indexed withdrawee);  // emitted in redeemGift
+    event FundsRedeemed(uint indexed fundsWithdrawn, address indexed withdrawee); 
 
     constructor(Initialization.GivingCircleInitialization memory init) {
         initialize(init);
@@ -59,6 +59,10 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         erc20TokenPerBean = 0;
     
         require(init.circleLeaders.length > 0, "You need atleast 1 leader for the circle!");
+
+        for (uint256 i = 0; i < init.admins.length; i++) {
+            _grantRole(DEFAULT_ADMIN_ROLE, init.admins[i]);
+        }  
 
         for (uint256 i = 0; i < init.circleLeaders.length; i++) {
             _grantRole(LEADER_ROLE, init.circleLeaders[i]);
@@ -87,11 +91,11 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     //     }
     // }
 
-    function batchCreateNewProposals(Proposals.Proposal[] memory newProposals) public onlyRole(LEADER_ROLE) {
-        require(newProposals.length > 0, "Please provider one or more proposer!");
+    function batchCreateNewProposals(Proposals.Contributor[] memory newContributors) public onlyRole(LEADER_ROLE) {
+        require(newContributors.length > 0, "Please provider one or more proposer!");
 
-        for (uint256 i = 0; i < newProposals.length; i++) {
-            createNewProposal(newProposals[i]);
+        for (uint256 i = 0; i < newContributors.length; i++) {
+            createNewProposal(newContributors[i]);
         }
     }
 
@@ -100,22 +104,38 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
     //allow someone to add themself as a proposer, new function createMyNewProposal()?
     //rename createNewProposal to createNewProposalForSomeoneElse()?
 
-    function createNewProposal(Proposals.Proposal memory proposal) public onlyRole(LEADER_ROLE) {
+    function createNewProposal(Proposals.Contributor memory newContributor) public onlyRole(LEADER_ROLE) {
         require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
-        require(!hasRole(PROPOSER_ROLE, proposal.contributor), "Recipient already present in proposal!");
-
+        require(!hasRole(PROPOSER_ROLE, newContributor.addr), "Recipient already present in proposal!");
 
         uint256 proposalIndex = proposalCount;
         Proposals.Proposal storage newProposal = proposals[proposalIndex];
-        newProposal.contributor = proposal.contributor;
-        newProposal.contributorName = proposal.contributorName;
-        newProposal.contributions = proposal.contributions;
+        newProposal.contributor.addr = newContributor.addr;
+        newProposal.contributor.name = newContributor.name;
+        newProposal.contributor.contributions = newContributor.contributions;
         newProposal.beansReceived = 0;
 
         proposalCount++;
 
-        _grantRole(PROPOSER_ROLE, proposal.contributor);
-        emit ProposalCreated(proposalIndex, newProposal.contributor);
+        _grantRole(PROPOSER_ROLE, newProposal.contributor.addr);
+        emit ProposalCreated(proposalIndex, newProposal.contributor.addr);
+    }
+
+    function createNewProposalForMe(Proposals.Contributor memory newContributor) public {
+        require(phase == Phase.PROPOSAL_CREATION, "circle needs to be in proposal creation phase.");
+        require(!hasRole(PROPOSER_ROLE, _msgSender()), "Recipient already present in proposal!");
+
+        uint256 proposalIndex = proposalCount;
+        Proposals.Proposal storage newProposal = proposals[proposalIndex];
+        newProposal.contributor.addr = payable(_msgSender());
+        newProposal.contributor.name = newContributor.name;
+        newProposal.contributor.contributions = newContributor.contributions;
+        newProposal.beansReceived = 0;
+
+        proposalCount++;
+
+        _grantRole(PROPOSER_ROLE, newProposal.contributor.addr);
+        emit ProposalCreated(proposalIndex, newProposal.contributor.addr);
     }
 
     // function createNewProposal(address payable proposer, string memory _name, string memory contributions) public onlyRole(LEADER_ROLE) {
@@ -229,17 +249,15 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         placeBeansMultiple(attendee, proposalIndices, beanQuantities);
     }
  
-    function ProgressToGiftRedeemPhase() external onlyRole(LEADER_ROLE) {
+    function ProgressToFundsRedemptionPhase() external onlyRole(LEADER_ROLE) {
         require(phase == Phase.BEAN_PLACEMENT, "circle needs to be in bean placement phase");
         require(erc20Token.balanceOf(address(this)) >= fundingThreshold, "Circle needs to be funded first!");
 
         _calcErc20TokenPerBean();
-        _allocateGifts();
+        _allocateFunds();
 
         phase = Phase.GIFT_REDEEM;
         emit VotingClosed();
-
-        //maybe send gifts directly from here?
     }
 
     //Start Phase 2 Internal Functions
@@ -253,22 +271,22 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         return newerc20TokenPerBean;
     }
 
-    function _allocateGifts () internal { 
+    function _allocateFunds () internal { 
 
         uint256 totalAllocated;
         for (uint i = 0; i < proposalCount; i++) {
             uint256 amountToAllocate = proposals[i].beansReceived * erc20TokenPerBean;
-            proposals[i].giftAmount = amountToAllocate;
+            proposals[i].contributor.fundsAllocated = amountToAllocate;
             totalAllocated += amountToAllocate;
         }
 
-        emit GiftsAllocated();
+        emit FundsAllocated();
     }
 
     //End Phase 2 Internal Functions
 
     //Start Phase 3 Core Functions    
-    function redeemGift(address addr) internal {
+    function redeemFunds(address addr) internal {
         require(
             phase == Phase.GIFT_REDEEM, "circle needs to be in gift redeem phase"
         );
@@ -278,31 +296,31 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         }
 
         for (uint256 i = 0; i < proposalCount; i++) {
-            if (proposals[i].contributor == addr) {
+            if (proposals[i].contributor.addr == addr) {
                 
-                require(!proposals[i].hasRedeemed, "You already redeemed your gift!");
+                require(!proposals[i].contributor.hasRedeemed, "You already redeemed your gift!");
 
-                erc20Token.approve(address(this), proposals[i].giftAmount);
-                erc20Token.transferFrom(address(this), proposals[i].contributor, proposals[i].giftAmount); // USDCgiftPending mapping is 10**18, thus so is redemptionqty
-                proposals[i].hasRedeemed = true;
-                emit GiftRedeemed(proposals[i].giftAmount, proposals[i].contributor);
+                erc20Token.approve(address(this), proposals[i].contributor.fundsAllocated);
+                erc20Token.transferFrom(address(this), proposals[i].contributor.addr, proposals[i].contributor.fundsAllocated);
+                proposals[i].contributor.hasRedeemed = true;
+                emit FundsRedeemed(proposals[i].contributor.fundsAllocated, proposals[i].contributor.addr);
                 break;
             }
         }
     }
 
-    function redeemGiftForSomeone(address addr) external onlyRole(FUNDS_MANAGER_ROLE) {
-        redeemGift(addr);
+    function redeemFundsForSomeone(address addr) external onlyRole(FUNDS_MANAGER_ROLE) {
+        redeemFunds(addr);
     }
     
-    function redeemGiftForSomeoneMultiple(address[] memory addrs) external onlyRole(FUNDS_MANAGER_ROLE) {
+    function redeemFundsForSomeoneMultiple(address[] memory addrs) external onlyRole(FUNDS_MANAGER_ROLE) {
         for (uint256 i = 0; i < addrs.length; i++) {
-            redeemGift(addrs[i]);
+            redeemFunds(addrs[i]);
         }
     }
     
-    function redeemMyGift() external onlyRole(PROPOSER_ROLE) {
-        redeemGift(msg.sender);
+    function redeemMyFunds() external onlyRole(PROPOSER_ROLE) {
+        redeemFunds(msg.sender);
     }
 
     function withdrawRemainingFunds(address addr) public onlyRole(FUNDS_MANAGER_ROLE) {
@@ -360,8 +378,8 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         uint256 total = 0;
 
         for (uint256 i = 0; i < proposalCount; i++) {
-            if (proposals[i].hasRedeemed) {
-                total += proposals[i].giftAmount;
+            if (proposals[i].contributor.hasRedeemed) {
+                total += proposals[i].contributor.fundsAllocated;
             }
         }
 
@@ -372,8 +390,8 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         uint256 total = 0;
 
         for (uint256 i = 0; i < proposalCount; i++) {
-            if (!proposals[i].hasRedeemed) {
-                total += proposals[i].giftAmount;
+            if (!proposals[i].contributor.hasRedeemed) {
+                total += proposals[i].contributor.fundsAllocated;
             }
         }
 
@@ -384,7 +402,7 @@ contract GivingCircle is IGivingCircle, AccessControl, Initializable {
         uint256 total = 0;
 
         for (uint256 i = 0; i < proposalCount; i++) {
-            total += proposals[i].giftAmount;
+            total += proposals[i].contributor.fundsAllocated;
         }
 
         return total;

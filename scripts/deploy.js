@@ -26,12 +26,12 @@ async function main() {
 
   const [owner] = await ethers.getSigners();
 
-
   let implementation = await deploy(
     "GivingCircle", {
     name: "",
     beansToDispursePerAttendee: 1,
     fundingThreshold: 0,
+    admins: ["0x0000000000000000000000000000000000000000"],
     circleLeaders: ["0x0000000000000000000000000000000000000000"],
     beanPlacementAdmins: [],
     fundsManagers: [],

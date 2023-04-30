@@ -3,11 +3,15 @@ pragma solidity ^0.8.4;
 
 library Proposals {
     struct Proposal {
-        address payable contributor;
-        string contributorName;
-        string contributions;
+        Contributor contributor;
         uint beansReceived;
-        uint256 giftAmount;
+    }
+
+    struct Contributor {
+        address payable addr;
+        string name;
+        string contributions;
+        uint256 fundsAllocated;
         bool hasRedeemed;
     }
 }
