@@ -1,4 +1,4 @@
-# Smart Contracts
+# Giving Circle Smart Contracts
 
 The Giving Circle concept relies on two main smart contracts that follow the Factory Design Pattern.
 
