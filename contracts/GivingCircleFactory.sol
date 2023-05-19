@@ -31,10 +31,7 @@ contract GivingCircleFactory is AccessControl {
     function createGivingCircle(Initialization.GivingCircleInitialization memory init) external onlyRole(CIRCLE_CREATOR_ROLE) {
         address clone = Clones.clone(address(implementation));
         IGivingCircle newGivingCircle = IGivingCircle(clone);
-        // init.name = init.name;
-        // init.circleLeaders = init.circleLeaders;
-        // init.beanPlacementAdmins = init.beanPlacementAdmins;
-        // init.fundsManagers = init.fundsManagers;
+
         newGivingCircle.initialize(init);
 
         instances[instancesCount] = newGivingCircle;

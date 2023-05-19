@@ -26,12 +26,15 @@ describe("Giving Circle", function () {
       name: "impl",
       beansToDispursePerAttendee: 10,
       fundingThreshold: 1000,
+      admins: [owner.address],
       circleLeaders: [owner.address],
       beanPlacementAdmins: [],
       fundsManagers: [],
       erc20Token: erc20TokenContract.address,
       kycController: kycController.address
     });
+
+
 
     const GivingCircleFactory = await ethers.getContractFactory("GivingCircleFactory");
     const givingCircleFactory = await GivingCircleFactory.deploy([owner.address]);
@@ -49,6 +52,7 @@ describe("Giving Circle", function () {
       name: "example",
       beansToDispursePerAttendee: 10,
       fundingThreshold: 1000,
+      admins: [owner.address],
       circleLeaders: [owner.address],
       beanPlacementAdmins: [],
       fundsManagers: [],
@@ -73,6 +77,7 @@ describe("Giving Circle", function () {
     
     let attendees = await givingCircleImplementation.getAttendees();
     console.log(attendees);
+
 
     await givingCircleImplementation.createNewProposal(
       { 
